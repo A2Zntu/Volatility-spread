@@ -5,18 +5,26 @@ Created on Sun Oct  7 23:39:57 2018
 @author: Evan
 """
 
-import MySQLdb
+import mysql.connector
+from mysql.connector.constants import ClientFlag
 import pandas as pd
 import numpy as np
 from datetime import date
 from py_vollib.black_scholes_merton.implied_volatility import implied_volatility as iv
 from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
+from itertools import repeat
 
 #%% load the data from Mysql, ZCB
-db = MySQLdb.connect(host="localhost",
-    user="root", passwd="Ntunew123", db="evan")
-cursor = db.cursor()
+config = {
+    'user': 'admin',
+    'password': 'Ntunew123',
+    'host': '140.112.111.161'
+}
+
+
+cnx = mysql.connector.connect(**config)
+cursor = cnx.cursor(buffered=True)
 
 list_year_and_month = []
 start_year = 2004
@@ -39,8 +47,14 @@ zcb_list = list(zcb['date'][:])
 time_period =  pd.read_csv("E:/Spyder/period_trade_1.csv", header = None)
 time_period.columns = ['Head', 'Tail', 'Fake_middle', 'Middle']
 
-#%%
-cym = 12 #certain year and month
+# List the 14 time period for column names 
+x_axis_hour = [] #generate x axis
+for s in time_period['Middle']:
+    if not int((s % 10000)/100) == 0:
+        x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+    else:
+        x_axis_hour.append(str(int(s/10000)) +':00')
+#%% read the data
 
 def sql_df(cym):
     sql = "SELECT * FROM evan.mdr_trade" + list_year_and_month[cym]
@@ -72,7 +86,13 @@ def time_delta(start_time, end_time):
 #%% ZCB
 
 def zcb_rate(trade_time, expire_time):
-    init_day = zcb_list.index(trade_time)
+    try:
+        init_day = zcb_list.index(trade_time)
+    except ValueError:
+        try:
+            init_day = zcb_list.index(trade_time - 1)
+        except ValueError:
+            init_day = zcb_list.index(trade_time + 1)
     
     j = True
     while j == True:
@@ -176,7 +196,6 @@ def volatility_spread_hour(start, end):
     spread_volume = []
     pair_list = call_put_pair(start, end)
     for i in range(len(pair_list)):
-
         if len(pair_list[i][0]) > 1 and len(pair_list[i][1]) > 1:
             Sc = float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE'])
             Sp = float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])
@@ -187,15 +206,24 @@ def volatility_spread_hour(start, end):
             call_price = float(pair_list[i][0]['TRADE_PRICE'])
             put_price = float(pair_list[i][1]['TRADE_PRICE'])
             vol = pair_list[i][2]
-            F = Sc*exp(r*t)
+            Fc = Sc*exp(r*t)
+            Fp = Sp*exp(r*t)
             
-            intrinsic_c = fabs(max(F - K, 0.0))
-            intrinsic_p = fabs(max(K - F, 0.0))
-            if call_price < intrinsic_c:
+            intrinsic_c = fabs(max(Fc - K, 0.0))
+            intrinsic_p = fabs(max(K - Fp, 0.0))
+            if t < 0: #eliminate the false expiration date from raw data
+#                print("Trade date: %s" %pair_list[i][0]['TRADE_DATE'])
+#                print("Expiration date: %s" %pair_list[i][0]['EXPIRATION_DATE'])
+#                print("Exercise price: %f" % K)
+#                print("===========================")
+                volitility_spread.append(0.0)
+                spread_volume.append(0.0)
+                
+            elif call_price < intrinsic_c:
                 volitility_spread.append(0.0)
                 spread_volume.append(0.0)
     
-            elif call_price >= F or put_price >= K:
+            elif call_price >= Fc or put_price >= K:
                 volitility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
@@ -241,36 +269,52 @@ def volatility_spread_hour(start, end):
 #%% Deal with the v.s. missing due to time missing
 
 def missing_vs(day_token, one_day_vs):
-    the_day = dim_list[day_token] #20050127
-    day_begin = dim_loc[day_token - 1] #9780
-    tomorrow = dim_loc[day_token] #10150
-    day_begin_loc = hid_loc.index(day_begin) #238
-    tomorrow_loc = hid_loc.index(tomorrow) #251
+
+    if not day_token == 0: 
+        day_begin = dim_loc[day_token - 1] 
+    else:  # If it is the first day, then special case
+        day_begin = 0 
+        
+    tomorrow = dim_loc[day_token] 
+    day_begin_loc = hid_loc.index(day_begin) 
+    tomorrow_loc = hid_loc.index(tomorrow) 
     list_temp_day = []
     list_j = list(range(14))
+    
     for i in range(day_begin_loc, tomorrow_loc):
+        
         if df['TRADE_TIME'][hid_loc[i]] <= time_period['Tail'][list_j[i-day_begin_loc]] and df['TRADE_TIME'][hid_loc[i]] >= time_period['Head'][list_j[i-day_begin_loc]]:
             list_temp_day.append(1)
-
+    
         else:
             list_temp_day.append(0)
             day_begin_loc = day_begin_loc -1
     
-    problem_loc = list_temp_day.index(0) # in this case, we assume there is only one problem in a day
-    one_day_vs.insert(problem_loc, np.nan)
+    if len(list_temp_day) == 14:    
+        problem_loc = list_temp_day.index(0) # in this case, we assume there is only one problem in a day
+        one_day_vs.insert(problem_loc, np.nan)
+    else:
+        one_day_vs.extend(repeat(np.nan, 14-len(list_temp_day)))
+        list_temp_day.extend(repeat(0, 14-len(list_temp_day)))
+        
+    return one_day_vs
+
+#Black friday CBOE only works to 12:30
+black_friday = pd.read_csv("E:/Spyder/blackfriday.csv")
+black_friday = list(black_friday['blackfriday'])
+
+def black_fri_vs(one_day_vs):
+    list_len = len(one_day_vs)
+    while list_len < 14:
+        one_day_vs.append(np.nan)
+        list_len = len(one_day_vs)
     return one_day_vs
 
 
 #%% Draw 2 kinds of plot 
-def vs_by_halfhr(df_one_month_vs):
-    mean_one_month_vs = df_one_month_vs.mean()
+def vs_by_halfhr(df_one_period_vs):
+    mean_one_month_vs = df_one_period_vs.mean()
     plt.style.use('ggplot')
-    x_axis_hour = [] #generate x axis
-    for s in time_period['Middle']:
-        if not int((s % 10000)/100) == 0:
-            x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
-        else:
-            x_axis_hour.append(str(int(s/10000)) +':00')
     
     plt.figure(figsize=(15,6))
     plt.plot(x_axis_hour, mean_one_month_vs)
@@ -280,8 +324,8 @@ def vs_by_halfhr(df_one_month_vs):
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
     
-def vs_by_day(df_one_month_vs):
-    mean_one_month_vs_1 = df_one_month_vs.mean(axis=1)
+def vs_by_day(df_one_period_vs):
+    mean_one_month_vs_1 = df_one_period_vs.mean(axis=1)
     x_axis_day = [str(i)[-2:] for i in dim_list] #[-2:] keep last 2 digits
     plt.figure(figsize=(15,6))
     plt.plot(x_axis_day, mean_one_month_vs_1)
@@ -292,8 +336,12 @@ def vs_by_day(df_one_month_vs):
     plt.show()
 
 
+
 #%% Main Code
-for cym in range(13, 14):
+df_one_period_vs = pd.DataFrame()
+#12~24 represent 2005
+for cym in range(30, 31):
+
     df = sql_df(cym)
     current_date = df["TRADE_DATE"][0]
     tpl = 0 #time period location
@@ -333,11 +381,10 @@ for cym in range(13, 14):
     dim_loc.append(rc)
 
     one_day_vs = []
-    #print("=========================")
-    #print("以下為%s的Volatility Spread " %df["TRADE_DATE"][hid_loc[0]])
-    #print("=========================")
+
     one_month_vs = []
     for i in range(len(hid_loc)):
+
         if i != len(hid_loc)-1:
             if hid_loc[i] not in dim_loc:
                 start = hid_loc[i]
@@ -345,30 +392,30 @@ for cym in range(13, 14):
                 one_day_vs.append(volatility_spread_hour(start, end))
             else:  
                 if not len(one_day_vs) == 14:
-                    one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs)
-    #                print("dim_loc.index(hid_loc[i]-1):%d"%dim_loc.index(hid_loc[i]-1))
+
+                    if not df["TRADE_DATE"][start] in black_friday:
+                        print(dim_loc.index(hid_loc[i]))
+                        print("== MOM! I am in the Area.==")
+                        one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs)
+                        
+                    else:
+                        one_day_vs = black_fri_vs(one_day_vs)
                 start = hid_loc[i]
                 end = hid_loc[i+1]
                 one_month_vs.append(one_day_vs)
-    #            print(one_day_vs)
                 one_day_vs = []
                 one_day_vs.append(volatility_spread_hour(start, end))
-    #            print("=========================")
-    #            print("以下為%s的Volatility Spread " %df["TRADE_DATE"][hid_loc[i]])
-    #            print("=========================")
+
         else:
             
             one_month_vs.append(one_day_vs)
 # transfer 2-D lists to dataframe
-    x_axis_hour = [] #generate x axis
-    for s in time_period['Middle']:
-        if not int((s % 10000)/100) == 0:
-            x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
-        else:
-            x_axis_hour.append(str(int(s/10000)) +':00')
-            
-    df_one_month_vs = pd.DataFrame(one_month_vs)
-    df_one_month_vs.columns = x_axis_hour
+   
     
-    vs_by_halfhr(df_one_month_vs) 
+    df_one_month_vs = pd.DataFrame(one_month_vs)
+    df_one_month_vs.index = dim_list
+    df_one_period_vs = df_one_period_vs.append(df_one_month_vs)
+    
+df_one_period_vs.columns = x_axis_hour
+vs_by_halfhr(df_one_period_vs) 
 #%%

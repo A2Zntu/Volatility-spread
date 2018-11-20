@@ -115,7 +115,7 @@ def zcb_rate(trade_time, expire_time):
 
 def MK_disc(S, K, t): # Maturity and strike discount 
     m = float(K/S - 1) # moneyness
-    M = max(1, t/30) #days to month
+    M = max(1, t/30) #days to month; at least one-month
     w = exp(-(m**2)/2 - (M - 1)**2)
     return w
 
@@ -135,7 +135,6 @@ def KD_disc(S, K, t):
 def call_put_pair(start, end):
     pair_list = []
     pair_dic = {}
-
     df["Dist"] = np.nan
     for i in range(start, end):
         #calaulate the time-distance for each tick
@@ -211,7 +210,7 @@ def volatility_spread_hour(start, end):
             
             intrinsic_c = fabs(max(Fc - K, 0.0))
             intrinsic_p = fabs(max(K - Fp, 0.0))
-            if t < 0: #eliminate the false expiration date from raw data
+            if t < 30/365: #eliminate the option with expiration less than 30 days
 #                print("Trade date: %s" %pair_list[i][0]['TRADE_DATE'])
 #                print("Expiration date: %s" %pair_list[i][0]['EXPIRATION_DATE'])
 #                print("Exercise price: %f" % K)
@@ -257,7 +256,7 @@ def volatility_spread_hour(start, end):
             volitility_spread.append(0.0)
             spread_volume.append(0.0)
             
-    try:
+    try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
         hour_vs = np.average(volitility_spread, weights = weights_aggr)
         
@@ -268,8 +267,8 @@ def volatility_spread_hour(start, end):
 
 #%% Deal with the v.s. missing due to time missing
 
-def missing_vs(day_token, one_day_vs):
-
+def missing_vs(day_token, one_day_vs, cym):
+    
     if not day_token == 0: 
         day_begin = dim_loc[day_token - 1] 
     else:  # If it is the first day, then special case
@@ -282,20 +281,30 @@ def missing_vs(day_token, one_day_vs):
     list_j = list(range(14))
     
     for i in range(day_begin_loc, tomorrow_loc):
+        print(i)
+        try:
+            if df['TRADE_TIME'][hid_loc[i]] <= time_period['Tail'][list_j[i-day_begin_loc]] and df['TRADE_TIME'][hid_loc[i]] >= time_period['Head'][list_j[i-day_begin_loc]]:
+                list_temp_day.append(1)
         
-        if df['TRADE_TIME'][hid_loc[i]] <= time_period['Tail'][list_j[i-day_begin_loc]] and df['TRADE_TIME'][hid_loc[i]] >= time_period['Head'][list_j[i-day_begin_loc]]:
-            list_temp_day.append(1)
+            else:
+                list_temp_day.append(0)
+                day_begin_loc = day_begin_loc -1
+                
     
-        else:
-            list_temp_day.append(0)
-            day_begin_loc = day_begin_loc -1
+        except IndexError: #If the day exists too many missing period, we exclude.
+            x = np.zeros(14, dtype=float)
+            x.fill(np.nan)
+            one_day_vs = list(x)
+            s = 1 #it is only a switch
     
-    if len(list_temp_day) == 14:    
+    if len(list_temp_day) == 14 and s != 1:    
         problem_loc = list_temp_day.index(0) # in this case, we assume there is only one problem in a day
         one_day_vs.insert(problem_loc, np.nan)
-    else:
+        s = 0
+    elif len(list_temp_day) != 14 and s != 1:
         one_day_vs.extend(repeat(np.nan, 14-len(list_temp_day)))
         list_temp_day.extend(repeat(0, 14-len(list_temp_day)))
+        s = 0
         
     return one_day_vs
 
@@ -312,36 +321,32 @@ def black_fri_vs(one_day_vs):
 
 
 #%% Draw 2 kinds of plot 
-def vs_by_halfhr(df_one_period_vs):
+def plot_vs_by_halfhr(df_one_period_vs, start_period, end_period):
     mean_one_month_vs = df_one_period_vs.mean()
     plt.style.use('ggplot')
     
     plt.figure(figsize=(15,6))
     plt.plot(x_axis_hour, mean_one_month_vs)
-    plt.title(list_year_and_month[cym] + "_By half-hour")
+    plt.title(list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] + "_By half-hour")
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
     
-def vs_by_day(df_one_period_vs):
+def plot_vs_by_day(df_one_period_vs, start_period, end_period):
     mean_one_month_vs_1 = df_one_period_vs.mean(axis=1)
     x_axis_day = [str(i)[-2:] for i in dim_list] #[-2:] keep last 2 digits
     plt.figure(figsize=(15,6))
     plt.plot(x_axis_day, mean_one_month_vs_1)
-    plt.title(list_year_and_month[cym] + "_By day")
+    plt.title(list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] + "_By day")
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
 
-
-
-#%% Main Code
-df_one_period_vs = pd.DataFrame()
-#12~24 represent 2005
-for cym in range(30, 31):
-
+#%% organize the time code
+def hid_dim_loc(cym):
+    global df, hour_period
     df = sql_df(cym)
     current_date = df["TRADE_DATE"][0]
     tpl = 0 #time period location
@@ -379,43 +384,78 @@ for cym in range(30, 31):
     # attach the final index of df           
     hid_loc.append(rc)
     dim_loc.append(rc)
+    return hid_loc, dim_loc, dim_list
 
-    one_day_vs = []
 
-    one_month_vs = []
-    for i in range(len(hid_loc)):
-
-        if i != len(hid_loc)-1:
-            if hid_loc[i] not in dim_loc:
-                start = hid_loc[i]
-                end = hid_loc[i+1]
-                one_day_vs.append(volatility_spread_hour(start, end))
-            else:  
-                if not len(one_day_vs) == 14:
-
-                    if not df["TRADE_DATE"][start] in black_friday:
-                        print(dim_loc.index(hid_loc[i]))
-                        print("== MOM! I am in the Area.==")
-                        one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs)
-                        
-                    else:
-                        one_day_vs = black_fri_vs(one_day_vs)
-                start = hid_loc[i]
-                end = hid_loc[i+1]
+#%% Main Code
+    
+def one_period_vs(start_period, end_period):
+    global hid_loc, dim_loc, dim_list
+    df_one_period_vs = pd.DataFrame()
+    
+    for cym in range(start_period, end_period):
+        hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
+    
+        one_day_vs = []
+        one_month_vs = []
+        for i in range(len(hid_loc)):
+    
+            if i != len(hid_loc)-1:
+                if hid_loc[i] not in dim_loc:
+                    start = hid_loc[i]
+                    end = hid_loc[i+1]
+                    one_day_vs.append(volatility_spread_hour(start, end))
+                else:  
+                    if not len(one_day_vs) == 14:
+    
+                        if not df["TRADE_DATE"][start] in black_friday:
+                            print(dim_loc.index(hid_loc[i]))
+                            print("== MOM! I am in the Area.==")
+                            one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs, cym)
+                            
+                        else:
+                            one_day_vs = black_fri_vs(one_day_vs)
+                    start = hid_loc[i]
+                    end = hid_loc[i+1]
+                    one_month_vs.append(one_day_vs)
+                    one_day_vs = []
+                    one_day_vs.append(volatility_spread_hour(start, end))
+    
+            else:
+                
                 one_month_vs.append(one_day_vs)
-                one_day_vs = []
-                one_day_vs.append(volatility_spread_hour(start, end))
-
-        else:
-            
-            one_month_vs.append(one_day_vs)
-# transfer 2-D lists to dataframe
-   
-    
-    df_one_month_vs = pd.DataFrame(one_month_vs)
-    df_one_month_vs.index = dim_list
-    df_one_period_vs = df_one_period_vs.append(df_one_month_vs)
-    
-df_one_period_vs.columns = x_axis_hour
-vs_by_halfhr(df_one_period_vs) 
+        # transfer 2-D lists to dataframe
+        # combine the one month_vs into one year vs 
+        df_one_month_vs = pd.DataFrame(one_month_vs)
+        df_one_month_vs.index = dim_list
+        df_one_period_vs = df_one_period_vs.append(df_one_month_vs)
+        
+    df_one_period_vs.columns = x_axis_hour
+    return df_one_period_vs
 #%%
+total_period = len(list_year_and_month)
+
+yearloc = []
+for i in range(total_period+1):
+    if i%12 == 0:
+        yearloc.append(i)
+
+#df_overall_vs = pd.DataFrame()
+for i in range(10, len(yearloc)):
+    period_start = yearloc[i-1] 
+    period_end = yearloc[i]
+    df_year_vs = one_period_vs(period_start, period_end)
+    plot_vs_by_halfhr(df_year_vs, period_start, period_end)
+    df_overall_vs = df_overall_vs.append(df_year_vs)
+    print("I finish a year!!")
+#%%
+period_start = yearloc[10-1] 
+period_end = yearloc[10]
+df_year_vs = one_period_vs(period_start, period_end)   
+plot_vs_by_halfhr(df_year_vs, period_start, period_end)
+
+#%%
+df_year_vs = one_period_vs(period_start, period_end)
+        
+
+

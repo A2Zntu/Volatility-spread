@@ -7,15 +7,18 @@ Created on Wed Nov  7 14:42:11 2018
 
 import os, shutil, glob
 
-path = 'E:/SPXintra/'
+path = 'F:/CBOE Options Tick Data/SPX Tick Data/'
 
 
 list_year_and_month = []
 list_year = []
-start_year = 2015
+start_year = 2004
 end_year = 2017
 start_month = 1
 end_month = 12
+
+extension = 'csv'
+
 
 
 for i in range(start_year, end_year + 1):
@@ -27,7 +30,7 @@ for i in range(start_year, end_year + 1):
             list_year_and_month.append(str(i) +str(j))
 
 
-for i, year in enumerate(range(start_year,end_year)):
+for i, year in enumerate(range(2004,2017)):
     for j in range(i*12, (i+1)*12):
         if not os.path.exists(path + list_year[i] + '/' + list_year_and_month[j]):
             os.makedirs(path + list_year[i] + '/' + list_year_and_month[j])
@@ -55,7 +58,7 @@ def right_dir(year, res):
 
 extension = 'gz'
 
-for i, year in enumerate(range(start_year, end_year)):
+for i, year in enumerate(range(2004,2016)):
     os.chdir(path + str(year))
     result = [i for i in glob.glob('*.{}'.format(extension))]
     for j in range(len(result)):

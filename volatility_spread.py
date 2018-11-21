@@ -19,7 +19,7 @@ from itertools import repeat
 config = {
     'user': 'admin',
     'password': 'Ntunew123',
-    'host': '140.112.111.161'
+    'host': 'localhost'
 }
 
 
@@ -50,10 +50,18 @@ time_period.columns = ['Head', 'Tail', 'Fake_middle', 'Middle']
 # List the 14 time period for column names 
 x_axis_hour = [] #generate x axis
 for s in time_period['Middle']:
-    if not int((s % 10000)/100) == 0:
-        x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+    if s < 100000: #Avoid the disorder in ploting the x-axis
+        if not int((s % 10000)/100) == 0:
+            x_axis_hour.append('0' + str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+        else:
+            x_axis_hour.append('0' + str(int(s/10000)) +':00')
     else:
-        x_axis_hour.append(str(int(s/10000)) +':00')
+        if not int((s % 10000)/100) == 0:
+            x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+        else:
+            x_axis_hour.append(str(int(s/10000)) +':00')
+x_axis_hour = np.array(x_axis_hour)
+
 #%% read the data
 
 def sql_df(cym):
@@ -268,7 +276,7 @@ def volatility_spread_hour(start, end):
 #%% Deal with the v.s. missing due to time missing
 
 def missing_vs(day_token, one_day_vs, cym):
-    
+    s = 0
     if not day_token == 0: 
         day_begin = dim_loc[day_token - 1] 
     else:  # If it is the first day, then special case
@@ -281,7 +289,6 @@ def missing_vs(day_token, one_day_vs, cym):
     list_j = list(range(14))
     
     for i in range(day_begin_loc, tomorrow_loc):
-        print(i)
         try:
             if df['TRADE_TIME'][hid_loc[i]] <= time_period['Tail'][list_j[i-day_begin_loc]] and df['TRADE_TIME'][hid_loc[i]] >= time_period['Head'][list_j[i-day_begin_loc]]:
                 list_temp_day.append(1)
@@ -300,11 +307,11 @@ def missing_vs(day_token, one_day_vs, cym):
     if len(list_temp_day) == 14 and s != 1:    
         problem_loc = list_temp_day.index(0) # in this case, we assume there is only one problem in a day
         one_day_vs.insert(problem_loc, np.nan)
-        s = 0
+
     elif len(list_temp_day) != 14 and s != 1:
         one_day_vs.extend(repeat(np.nan, 14-len(list_temp_day)))
         list_temp_day.extend(repeat(0, 14-len(list_temp_day)))
-        s = 0
+
         
     return one_day_vs
 
@@ -346,6 +353,7 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 
 #%% organize the time code
 def hid_dim_loc(cym):
+    print(cym)
     global df, hour_period
     df = sql_df(cym)
     current_date = df["TRADE_DATE"][0]
@@ -384,6 +392,7 @@ def hid_dim_loc(cym):
     # attach the final index of df           
     hid_loc.append(rc)
     dim_loc.append(rc)
+
     return hid_loc, dim_loc, dim_list
 
 
@@ -438,10 +447,10 @@ total_period = len(list_year_and_month)
 yearloc = []
 for i in range(total_period+1):
     if i%12 == 0:
-        yearloc.append(i)
+        yearloc.append(i)                                      
 
 #df_overall_vs = pd.DataFrame()
-for i in range(10, len(yearloc)):
+for i in range(11, len(yearloc)):
     period_start = yearloc[i-1] 
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -455,7 +464,7 @@ df_year_vs = one_period_vs(period_start, period_end)
 plot_vs_by_halfhr(df_year_vs, period_start, period_end)
 
 #%%
-df_year_vs = one_period_vs(period_start, period_end)
-        
+
+
 
 

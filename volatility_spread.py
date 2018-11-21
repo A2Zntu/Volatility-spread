@@ -122,9 +122,13 @@ def zcb_rate(trade_time, expire_time):
 #%% define information aggregation method
 
 def MK_disc(S, K, t): # Maturity and strike discount 
-    m = float(K/S - 1) # moneyness
-    M = max(1, t/30) #days to month; at least one-month
-    w = exp(-(m**2)/2 - (M - 1)**2)
+    try:
+        m = float(K/S - 1) # moneyness
+        M = max(1, t/30.0) #days to month; at least one-month
+        w = exp(-(m**2)/2 - (M - 1)**2)
+    except ZeroDivisionError:
+        M = max(1, t/30.0)
+        w = exp(- (M - 1)**2)
     return w
 
 def MD_disc(t):
@@ -157,13 +161,13 @@ def call_put_pair(start, end):
         dict_key = "K:"+ str(df["EXERCISE_PRICE"][i])+"/"+"T:" +str(td)
 #-------------------------------------------------------------------------
 # --> current volume (without adjusted)
-        cur_vol = df['TRADE_SIZE'][i] 
+#        cur_vol = df['TRADE_SIZE'][i] 
 #------------------------------------------------------------------------- 
 # --> current volume (with adjusted)
-#        S = float(df['UNDERLYING_INSTRUMENT_PRICE'][i])
-#        K = float(df['EXERCISE_PRICE'][i])
-#        t = time_delta(df['TRADE_DATE'][i], df['EXPIRATION_DATE'][i])
-#        cur_vol = df['TRADE_SIZE'][i]*MK_disc(S, K, t)
+        S = float(df['UNDERLYING_INSTRUMENT_PRICE'][i])
+        K = float(df['EXERCISE_PRICE'][i])
+        t = time_delta(df['TRADE_DATE'][i], df['EXPIRATION_DATE'][i])
+        cur_vol = df['TRADE_SIZE'][i]*MK_disc(S, K, t)
 #-------------------------------------------------------------------------
         if dict_key not in pair_dic:
 
@@ -199,7 +203,7 @@ def call_put_pair(start, end):
     return pair_list
 #%% volatility spread per hour
 def volatility_spread_hour(start, end):
-    volitility_spread = []
+    volatility_spread = []
     spread_volume = []
     pair_list = call_put_pair(start, end)
     for i in range(len(pair_list)):
@@ -219,23 +223,19 @@ def volatility_spread_hour(start, end):
             intrinsic_c = fabs(max(Fc - K, 0.0))
             intrinsic_p = fabs(max(K - Fp, 0.0))
             if t < 30/365: #eliminate the option with expiration less than 30 days
-#                print("Trade date: %s" %pair_list[i][0]['TRADE_DATE'])
-#                print("Expiration date: %s" %pair_list[i][0]['EXPIRATION_DATE'])
-#                print("Exercise price: %f" % K)
-#                print("===========================")
-                volitility_spread.append(0.0)
+                volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
             elif call_price < intrinsic_c:
-                volitility_spread.append(0.0)
+                volatility_spread.append(0.0)
                 spread_volume.append(0.0)
     
             elif call_price >= Fc or put_price >= K:
-                volitility_spread.append(0.0)
+                volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
             elif put_price < intrinsic_p:
-                volitility_spread.append(0.0)
+                volatility_spread.append(0.0)
                 spread_volume.append(0.0)                
                 
                 
@@ -257,16 +257,16 @@ def volatility_spread_hour(start, end):
                              q = q)
                 
                 vol_spread = call_iv - put_iv
-                volitility_spread.append(vol_spread)
+                volatility_spread.append(vol_spread)
                 spread_volume.append(vol)
                 
         else:
-            volitility_spread.append(0.0)
+            volatility_spread.append(0.0)
             spread_volume.append(0.0)
             
     try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
-        hour_vs = np.average(volitility_spread, weights = weights_aggr)
+        hour_vs = np.average(volatility_spread, weights = weights_aggr)
         
     except ZeroDivisionError:
         hour_vs = np.nan
@@ -353,7 +353,7 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 
 #%% organize the time code
 def hid_dim_loc(cym):
-    print(cym)
+    print("Now, we are in: %s"%list_year_and_month[cym])
     global df, hour_period
     df = sql_df(cym)
     current_date = df["TRADE_DATE"][0]
@@ -449,8 +449,10 @@ for i in range(total_period+1):
     if i%12 == 0:
         yearloc.append(i)                                      
 
+
+
 #df_overall_vs = pd.DataFrame()
-for i in range(11, len(yearloc)):
+for i in range(4, len(yearloc)):
     period_start = yearloc[i-1] 
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -458,13 +460,14 @@ for i in range(11, len(yearloc)):
     df_overall_vs = df_overall_vs.append(df_year_vs)
     print("I finish a year!!")
 #%%
-period_start = yearloc[10-1] 
-period_end = yearloc[10]
-df_year_vs = one_period_vs(period_start, period_end)   
-plot_vs_by_halfhr(df_year_vs, period_start, period_end)
+#period_start = yearloc[10-1] 
+#period_end = yearloc[10]
+#df_year_vs = one_period_vs(period_start, period_end)   
+#plot_vs_by_halfhr(df_year_vs, period_start, period_end)
 
 #%%
 
 
-
+#df_overall_vs.to_csv("E:/Spyder/overall_vs.csv")
+plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 

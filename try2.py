@@ -14,7 +14,7 @@ def MK_disc(S, K, t): # Maturity and strike discount
         M = max(1, t/30.0) #days to month; at least one-month
         w = exp(-(m**2)/2 - (M - 1)**2)
     except ZeroDivisionError:
-
+        M = max(1, t/30.0)
         w = exp(- (M - 1)**2)
     return w
 w = MK_disc(S, K, t)

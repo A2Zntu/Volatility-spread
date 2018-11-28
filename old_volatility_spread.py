@@ -222,7 +222,7 @@ def volatility_spread_hour(start, end):
             
             intrinsic_c = fabs(max(Sc - PV_K, 0.0))
             intrinsic_p = fabs(max(PV_K - Sp, 0.0))
-            if t < 30/365: #eliminate the option with expiration less than 30 days
+            if t < 10/365: #eliminate the option with expiration less than 30 days
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
@@ -299,9 +299,9 @@ def missing_vs(day_token, one_day_vs, cym):
                 
     
         except IndexError: #If the day exists too many missing period, we exclude.
-            x = np.zeros(14, dtype=float)
-            x.fill(np.nan)
-            one_day_vs = list(x)
+            one_day_vs.reverse()
+            one_day_vs.extend(repeat(np.nan, 14-len(one_day_vs)))
+            one_day_vs.reverse()
             s = 1 #it is only a switch
     
     if len(list_temp_day) == 14 and s != 1:    
@@ -452,12 +452,12 @@ for i in range(total_period+1):
 
 
 #df_overall_vs = pd.DataFrame()
-for i in range(5, len(yearloc)):
+for i in range(10, 11):
     period_start = yearloc[i-1] 
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
     plot_vs_by_halfhr(df_year_vs, period_start, period_end)
-    df_overall_vs = df_overall_vs.append(df_year_vs)
+#    df_overall_vs = df_overall_vs.append(df_year_vs)
     print("I finish a year!!")
 #%%
 #period_start = yearloc[10-1] 
@@ -468,6 +468,6 @@ for i in range(5, len(yearloc)):
 #%%
 
 
-df_overall_vs.to_csv("E:/Spyder/overall_vs_withadj_new.csv")
-plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
+#df_overall_vs.to_csv("E:/Spyder/overall_vs_withadj_10days.csv")
+#plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 

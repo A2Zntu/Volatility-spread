@@ -9,7 +9,7 @@ import mysql.connector
 from mysql.connector.constants import ClientFlag
 import pandas as pd
 import numpy as np
-from datetime import date
+from datetime import date, time, datetime
 from py_vollib.black_scholes_merton.implied_volatility import implied_volatility as iv
 from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
@@ -19,7 +19,7 @@ from itertools import repeat
 config = {
     'user': 'admin',
     'password': 'Ntunew123',
-    'host': 'localhost'
+    'host': '140.112.111.161'
 }
 
 
@@ -91,6 +91,14 @@ def time_delta(start_time, end_time):
     delta_t = date_time2.days
     return delta_t
 
+def seconds_delta(start_time, end_time):
+    s = start_time
+    e = end_time
+    minute_time0 = time(hour = int(s/10000), minute = int((s % 10000)/100), second = int(s % 100))
+    minute_time1 = time(hour = int(e/10000), minute = int((e % 10000)/100), second = int(e % 100))
+    minute_time2 = abs(datetime.combine(date.min, minute_time0) - datetime.combine(date.min, minute_time1))
+    sec_t = minute_time2.seconds
+    return sec_t
 #%% ZCB
 
 def zcb_rate(trade_time, expire_time):
@@ -150,10 +158,7 @@ def call_put_pair(start, end):
     df["Dist"] = np.nan
     for i in range(start, end):
         #calaulate the time-distance for each tick
-        if df['TRADE_TIME'][i] < time_period['Fake_middle'][hour_period[i]]:
-            dist = time_period['Fake_middle'][hour_period[i]] - df['TRADE_TIME'][i]
-        else:
-            dist = abs(df['TRADE_TIME'][i] - time_period['Middle'][hour_period[i]])
+        dist = seconds_delta(df['TRADE_TIME'][i], time_period['Middle'][hour_period[i]])
             
         df.loc[i,'Dist'] = dist
         td = time_delta(df["TRADE_DATE"][i], df["EXPIRATION_DATE"][i]) #calulate the delta T
@@ -201,6 +206,12 @@ def call_put_pair(start, end):
                     pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
     
     return pair_list
+#%% aggrgate vs information
+aggre_vs_inform = []    
+def record_vs(vs_information):
+    aggre_vs_inform.append(vs_information)
+    return aggre_vs_inform
+    
 #%% volatility spread per hour
 def volatility_spread_hour(start, end):
     volatility_spread = []
@@ -210,6 +221,7 @@ def volatility_spread_hour(start, end):
         if len(pair_list[i][0]) > 1 and len(pair_list[i][1]) > 1:
             Sc = float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE'])
             Sp = float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])
+            Sa = (Sc+Sp)/2.0
             r = zcb_rate(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])
             K = float(pair_list[i][0]['EXERCISE_PRICE'])
             t = time_delta(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])/365
@@ -217,7 +229,8 @@ def volatility_spread_hour(start, end):
             call_price = float(pair_list[i][0]['TRADE_PRICE'])
             put_price = float(pair_list[i][1]['TRADE_PRICE'])
             vol = pair_list[i][2]
-            
+            timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
+            moneyness = float(K/Sa - 1) #As for put, it's the level of ITM; for call, OTM. 
             PV_K = K*exp(-r*t)
             
             intrinsic_c = fabs(max(Sc - PV_K, 0.0))
@@ -259,6 +272,7 @@ def volatility_spread_hour(start, end):
                 vol_spread = call_iv - put_iv
                 volatility_spread.append(vol_spread)
                 spread_volume.append(vol)
+                record_vs([vol_spread, timediff, moneyness, t])
                 
         else:
             volatility_spread.append(0.0)
@@ -271,8 +285,9 @@ def volatility_spread_hour(start, end):
     except ZeroDivisionError:
         hour_vs = np.nan
 
-    return hour_vs 
+    return hour_vs
 
+    
 #%% Deal with the v.s. missing due to time missing
 
 def missing_vs(day_token, one_day_vs, cym):
@@ -410,11 +425,12 @@ def one_period_vs(start_period, end_period):
         for i in range(len(hid_loc)):
     
             if i != len(hid_loc)-1:
-                if hid_loc[i] not in dim_loc:
+                if hid_loc[i] not in dim_loc: # 08:30~14:30
                     start = hid_loc[i]
                     end = hid_loc[i+1]
-                    one_day_vs.append(volatility_spread_hour(start, end))
-                else:  
+                    hour_vs = volatility_spread_hour(start, end)
+                    one_day_vs.append(hour_vs)
+                else:  #15:00
                     if not len(one_day_vs) == 14:
     
                         if not df["TRADE_DATE"][start] in black_friday:
@@ -452,8 +468,8 @@ for i in range(total_period+1):
 
 
 #df_overall_vs = pd.DataFrame()
-for i in range(10, 11):
-    period_start = yearloc[i-1] 
+for i in range(1, 2):
+    period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
     plot_vs_by_halfhr(df_year_vs, period_start, period_end)

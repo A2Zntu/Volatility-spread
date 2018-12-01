@@ -19,7 +19,7 @@ from itertools import repeat
 config = {
     'user': 'admin',
     'password': 'Ntunew123',
-    'host': '140.112.111.161'
+    'host': 'localhost'
 }
 
 
@@ -99,6 +99,14 @@ def seconds_delta(start_time, end_time):
     minute_time2 = abs(datetime.combine(date.min, minute_time0) - datetime.combine(date.min, minute_time1))
     sec_t = minute_time2.seconds
     return sec_t
+
+def dummy_hour(the_time):
+    dummy = 0
+    for i in range(len(time_period)):
+        if the_time >= time_period['Head'][i] and the_time <= time_period['Tail'][i]:
+            dummy = i
+    return dummy
+
 #%% ZCB
 
 def zcb_rate(trade_time, expire_time):
@@ -223,6 +231,7 @@ def volatility_spread_hour(start, end):
             Sp = float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])
             Sa = (Sc+Sp)/2.0
             r = zcb_rate(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])
+                
             K = float(pair_list[i][0]['EXERCISE_PRICE'])
             t = time_delta(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])/365
             q = 0
@@ -230,11 +239,16 @@ def volatility_spread_hour(start, end):
             put_price = float(pair_list[i][1]['TRADE_PRICE'])
             vol = pair_list[i][2]
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
-            moneyness = float(K/Sa - 1) #As for put, it's the level of ITM; for call, OTM. 
+            dummy = dummy_hour(pair_list[i][0]['TRADE_DATE'])
             PV_K = K*exp(-r*t)
-            
             intrinsic_c = fabs(max(Sc - PV_K, 0.0))
             intrinsic_p = fabs(max(PV_K - Sp, 0.0))
+            
+            if Sa != 0:
+                moneyness = float(K/Sa - 1) #As for put, it's the level of ITM; for call, OTM.             
+            else:
+                moneyness = 0
+                
             if t < 10/365: #eliminate the option with expiration less than 30 days
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
@@ -250,7 +264,10 @@ def volatility_spread_hour(start, end):
             elif put_price < intrinsic_p:
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)                
-                
+            
+            elif Sc == 0 or Sp == 0: #typo error
+                volatility_spread.append(0.0)
+                spread_volume.append(0.0) 
                 
             else:
                 call_iv = iv(price = call_price, 
@@ -272,7 +289,7 @@ def volatility_spread_hour(start, end):
                 vol_spread = call_iv - put_iv
                 volatility_spread.append(vol_spread)
                 spread_volume.append(vol)
-                record_vs([vol_spread, timediff, moneyness, t])
+                record_vs([vol_spread, timediff, moneyness, t, dummy])
                 
         else:
             volatility_spread.append(0.0)
@@ -465,10 +482,10 @@ for i in range(total_period+1):
     if i%12 == 0:
         yearloc.append(i)                                      
 
-
+endyearloc = len(yearloc)
 
 #df_overall_vs = pd.DataFrame()
-for i in range(1, 2):
+for i in range(6, 7):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -484,6 +501,6 @@ for i in range(1, 2):
 #%%
 
 
-#df_overall_vs.to_csv("E:/Spyder/overall_vs_withadj_10days.csv")
+#df_overall_vs.to_csv("E:/Spyder/vs_10days_withinfo.csv")
 #plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 

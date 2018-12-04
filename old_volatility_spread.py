@@ -19,9 +19,9 @@ from itertools import repeat
 config = {
     'user': 'admin',
     'password': 'Ntunew123',
-    'host': 'localhost'
+    'host': '140.112.111.161'
 }
-
+#140.112.111.161
 
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
@@ -485,12 +485,12 @@ for i in range(total_period+1):
 endyearloc = len(yearloc)
 
 #df_overall_vs = pd.DataFrame()
-for i in range(6, 7):
+for i in range(14, endyearloc):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
     plot_vs_by_halfhr(df_year_vs, period_start, period_end)
-#    df_overall_vs = df_overall_vs.append(df_year_vs)
+    df_overall_vs = df_overall_vs.append(df_year_vs)
     print("I finish a year!!")
 #%%
 #period_start = yearloc[10-1] 
@@ -500,7 +500,8 @@ for i in range(6, 7):
 
 #%%
 
-
+df_overall_vs = df_IVS
+period_start = 0
 #df_overall_vs.to_csv("E:/Spyder/vs_10days_withinfo.csv")
-#plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
+plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 

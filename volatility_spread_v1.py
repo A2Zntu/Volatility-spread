@@ -487,8 +487,8 @@ endyearloc = len(yearloc)
 
 df_overall_vs = pd.DataFrame()
 #2007 is 4
-#for i in range(4, endyearloc):
-for i in range(1, 2):
+for i in range(4, endyearloc):
+#for i in range(1, 2):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -508,7 +508,7 @@ info_aggre_columns_name = ['IVS', 'TimeDiff', 'Moneyness', 'Maturity', 'Dummy', 
 df_aggre_vs_info.columns = info_aggre_columns_name
 df_aggre_vs_info.to_csv("E:/Spyder/info_vs_aggre_2007to2017.csv")
 #
-#df_overall_vs.to_csv("E:/Spyder/vs_10days_mkdweighted_2007to2017.csv")
+df_overall_vs.to_csv("E:/Spyder/vs_10days_mkdweighted_2007to2017.csv")
 plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 
 

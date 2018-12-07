@@ -11,7 +11,7 @@ from datetime import date
 from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
 from itertools import repeat
-from scipy.stats import shapiro, norm
+from scipy.stats import shapiro, norm, kurtosis, skew
 from statsmodels.graphics.gofplots import qqplot
 import statsmodels.formula.api as sm
 import seaborn as sns; sns.set()
@@ -72,6 +72,26 @@ def plot_des_info(df_year_vs, yearname):
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
+
+
+#%% turn results into dataframe
+
+def results_summary_to_dataframe(results):
+    '''take the result of an statsmodel results table and transforms it into a dataframe'''
+    pvals = results.pvalues
+    coeff = results.params
+    conf_lower = results.conf_int()[0]
+    conf_higher = results.conf_int()[1]
+
+    results_df = pd.DataFrame({"pvals":pvals,
+                               "coeff":coeff,
+                               "conf_lower":conf_lower,
+                               "conf_higher":conf_higher
+                                })
+
+    #Reordering...
+    results_df = results_df[["coeff","pvals","conf_lower","conf_higher"]]
+    return results_df
     
 #%%
 df_IVS = pd.read_csv("E:/Spyder/IVS/vs_10days_withinfo.csv", index_col = 0)
@@ -121,40 +141,24 @@ for i in range(1, 15):
 #    plot_des_info(df_nan, yearname)
 df_aggre_nan.index = list_year
 
-#%% regression 
-    
-df_SP = pd.read_csv("E:/Spyder/BMG/SPX_PUTCALL.csv")
+#%% read data
+
 df_info = pd.read_csv("E:/Spyder/IVS/aggre_vs_info.csv", skiprows = 0, index_col = 0)
-
-#results_as_html = results_summary.tables[1].as_html()
-#pd.read_html(results_as_html, header=0, index_col=0)
-    
-
-#%%
-
-def results_summary_to_dataframe(results):
-    '''take the result of an statsmodel results table and transforms it into a dataframe'''
-    pvals = results.pvalues
-    coeff = results.params
-    conf_lower = results.conf_int()[0]
-    conf_higher = results.conf_int()[1]
-
-    results_df = pd.DataFrame({"pvals":pvals,
-                               "coeff":coeff,
-                               "conf_lower":conf_lower,
-                               "conf_higher":conf_higher
-                                })
-
-    #Reordering...
-    results_df = results_df[["coeff","pvals","conf_lower","conf_higher"]]
-    return results_df
-#%%
-df_info = pd.read_csv("E:/Spyder/IVS/aggre_vs_info.csv", skiprows = 0, index_col = 0)
-df_info['Moneyness'] = df_info['Moneyness']
+df_info['Moneyness'] = abs(df_info['Moneyness'])
 df_info['TimeDiff'] = df_info['TimeDiff']/300
 df_info['IVS'] = abs(df_info['IVS'])
 
-results = sm.ols(formula = 'IVS ~ TimeDiff ', data =  df_info).fit()
+info_corr = np.corrcoef(df_info['IVS'], df_info['TimeDiff'])
+print(info_corr)
+print("kurtosis:%f"%kurtosis(df_info['IVS']))
+print("skewness:%f"%skew(df_info['IVS']))
+autocorr = df_info['IVS'].autocorr(lag=1)
+print(autocorr)
+
+#%% regression on IVS
+# The t-statistics are Newy-west adjusted. 
+
+results = sm.ols(formula = 'IVS ~ Moneyness', data =  df_info).fit(cov_type='HAC',cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary())
 
@@ -169,10 +173,27 @@ plt.grid(axis='y', alpha=0.75)
 plt.xlabel('Value')
 plt.ylabel('Frequency')
 plt.title('IVS')
-#maxfreq = n.max()
-## Set a clean upper y-axis limit.
-#plt.ylim(ymax=np.ceil(maxfreq / 10) * 10 if maxfreq % 10 else maxfreq + 10)
 
+#%% read data
+df_SP = pd.read_csv("E:/Spyder/BMG/SPX_PUTCALL.csv", index_col = 0)
+list_SPXprice = [price for price in df_SP['SPX Price']]
+list_SPXreturn = []
+for i in range(1, len(list_SPXprice)):
+    list_SPXreturn.append(np.log(list_SPXprice[i]/list_SPXprice[i-1]))
+list_SPXreturn.append(np.nan)
+df_IVS['SPX price'] = df_IVS.index.map(df_SP['SPX Price'])
+df_IVS['SPX return'] = list_SPXreturn
+df_copy = df_IVS.copy()
+columns_name = ['t0830', 't0900', 't0930', 't1000', 
+                't1030', 't1100', 't1130', 't1200', 
+                't1230', 't1300', 't1330', 't1400', 
+                't1430', 't1500', 'SPX_price', 'SPX_return']
+df_copy.columns = columns_name
+df_copy.to_csv("E:/Spyder/IVS/copy.csv")
+df_copy = df_copy.iloc[755:, :]
 
-
-
+#%% regression on return
+df_change = pd.read_csv("E:/Spyder/IVS/IVS_change_2007.csv", index_col = 0)
+results = sm.ols(formula = 'SPX_return ~ t1030', data =  df_change, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
+results_summary = results.summary()
+print(results.summary())

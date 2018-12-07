@@ -103,7 +103,7 @@ def seconds_delta(start_time, end_time):
 def dummy_hour(the_time):
     dummy = 0
     for i in range(len(time_period)):
-        if the_time >= time_period['Head'][i] and the_time <= time_period['Tail'][i]:
+        if the_time >= time_period['Head'][i] and the_time < time_period['Tail'][i]:
             dummy = i
     return dummy
 
@@ -240,11 +240,11 @@ def volatility_spread_hour(start, end):
             put_price = float(pair_list[i][1]['TRADE_PRICE'])
             vol = MK_disc(Sa, K, t)
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
-            dummy = dummy_hour(pair_list[i][0]['TRADE_DATE'])
+            dummy = dummy_hour(pair_list[i][0]['TRADE_TIME'])
             PV_K = K*exp(-r*t)
             intrinsic_c = fabs(max(Sc - PV_K, 0.0))
             intrinsic_p = fabs(max(PV_K - Sp, 0.0))
-            
+            Sprice_diff = Sc - Sp
             if Sa != 0:
                 moneyness = float(K/Sa - 1) #As for put, it's the level of ITM; for call, OTM.             
             else:
@@ -290,7 +290,7 @@ def volatility_spread_hour(start, end):
                 vol_spread = call_iv - put_iv
                 volatility_spread.append(vol_spread)
                 spread_volume.append(vol)
-                record_vs([vol_spread, timediff, moneyness, t, dummy])
+                record_vs([vol_spread, timediff, moneyness, t, dummy,  Sprice_diff])
                 
         else:
             volatility_spread.append(0.0)
@@ -487,7 +487,8 @@ endyearloc = len(yearloc)
 
 df_overall_vs = pd.DataFrame()
 #2007 is 4
-for i in range(4, endyearloc):
+#for i in range(4, endyearloc):
+for i in range(1, 2):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -500,12 +501,14 @@ for i in range(4, endyearloc):
 #df_year_vs = one_period_vs(period_start, period_end)   
 #plot_vs_by_halfhr(df_year_vs, period_start, period_end)
 
-#%%
+#%% Store the file
 
 df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
-df_aggre_vs_info.to_csv("E:/Spyder/aggre_vs_info.csv")
-
-df_overall_vs.to_csv("E:/Spyder/vs_10days_withinfo.csv")
+info_aggre_columns_name = ['IVS', 'TimeDiff', 'Moneyness', 'Maturity', 'Dummy', 'SpriceDiff']
+df_aggre_vs_info.columns = info_aggre_columns_name
+df_aggre_vs_info.to_csv("E:/Spyder/info_vs_aggre_2007to2017.csv")
+#
+#df_overall_vs.to_csv("E:/Spyder/vs_10days_mkdweighted_2007to2017.csv")
 plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 
 

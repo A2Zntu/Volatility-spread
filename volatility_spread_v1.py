@@ -180,7 +180,7 @@ def call_put_pair(start, end):
         S = float(df['UNDERLYING_INSTRUMENT_PRICE'][i])
         K = float(df['EXERCISE_PRICE'][i])
         t = time_delta(df['TRADE_DATE'][i], df['EXPIRATION_DATE'][i])
-        cur_vol = df['TRADE_SIZE'][i]*MK_disc(S, K, t)
+        cur_vol = MK_disc(S, K, t)
 #-------------------------------------------------------------------------
         if dict_key not in pair_dic:
 
@@ -221,6 +221,7 @@ def record_vs(vs_information):
     return aggre_vs_inform
     
 #%% volatility spread per hour
+# vs wighted by MK discount
 def volatility_spread_hour(start, end):
     volatility_spread = []
     spread_volume = []
@@ -237,7 +238,7 @@ def volatility_spread_hour(start, end):
             q = 0
             call_price = float(pair_list[i][0]['TRADE_PRICE'])
             put_price = float(pair_list[i][1]['TRADE_PRICE'])
-            vol = pair_list[i][2]
+            vol = MK_disc(Sa, K, t)
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
             dummy = dummy_hour(pair_list[i][0]['TRADE_DATE'])
             PV_K = K*exp(-r*t)
@@ -474,7 +475,7 @@ def one_period_vs(start_period, end_period):
         
     df_one_period_vs.columns = x_axis_hour
     return df_one_period_vs
-#%%
+#%% Run the IVS
 total_period = len(list_year_and_month)
 
 yearloc = []
@@ -484,8 +485,9 @@ for i in range(total_period+1):
 
 endyearloc = len(yearloc)
 
-#df_overall_vs = pd.DataFrame()
-for i in range(14, endyearloc):
+df_overall_vs = pd.DataFrame()
+#2007 is 4
+for i in range(4, endyearloc):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)
@@ -500,8 +502,10 @@ for i in range(14, endyearloc):
 
 #%%
 
-df_overall_vs = df_IVS
-period_start = 0
-#df_overall_vs.to_csv("E:/Spyder/vs_10days_withinfo.csv")
+df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
+df_aggre_vs_info.to_csv("E:/Spyder/aggre_vs_info.csv")
+
+df_overall_vs.to_csv("E:/Spyder/vs_10days_withinfo.csv")
 plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
+
 

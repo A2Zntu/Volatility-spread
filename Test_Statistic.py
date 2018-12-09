@@ -14,6 +14,7 @@ from itertools import repeat
 from scipy.stats import shapiro, norm, kurtosis, skew
 from statsmodels.graphics.gofplots import qqplot
 import statsmodels.formula.api as sm
+from statsmodels.tsa.stattools import adfuller
 import seaborn as sns; sns.set()
 #%%
 time_period =  pd.read_csv("E:/Spyder/period_trade_1.csv", header = None)
@@ -35,7 +36,7 @@ x_axis_hour = np.array(x_axis_hour)
 
 list_year_and_month = []
 list_year = []
-start_year = 2004
+start_year = 2007
 end_year = 2017
 start_month = 1
 end_month = 12
@@ -93,8 +94,8 @@ def results_summary_to_dataframe(results):
     results_df = results_df[["coeff","pvals","conf_lower","conf_higher"]]
     return results_df
     
-#%%
-df_IVS = pd.read_csv("E:/Spyder/IVS/vs_10days_withinfo.csv", index_col = 0)
+#%% test the population mean of IVS between 2007 to 2017 (11 X 14)
+df_IVS = pd.read_csv("E:/Spyder/IVS/vs_10days_mkdweighted_2007to2017.csv", index_col = 0)
 # Assume all the distributions are not normal. 
 list_stat = []
 list_p = []
@@ -116,7 +117,7 @@ df_stat.index = x_axis_hour
 
 whole_days = list(df_IVS.index)
 
-start_year = 2004
+start_year = 2007
 yit = [0,]
 for i, day in enumerate(whole_days):
     if str(day)[:4] == str(start_year):
@@ -129,7 +130,7 @@ yit.append(len(whole_days)) #include the last digit
 
 # total length = 15; first = 1
 df_aggre_nan = pd.DataFrame()
-for i in range(1, 15):
+for i in range(1, 12):
     init = yit[i-1]
     end = yit[i]
     df_year_vs = df_IVS[init:end]
@@ -138,51 +139,63 @@ for i in range(1, 15):
     df_std = df_year_vs.std()
     df_nan = df_year_vs.isna().sum()
     df_aggre_nan = df_aggre_nan.append(pd.DataFrame(df_nan).T)
-#    plot_des_info(df_nan, yearname)
 df_aggre_nan.index = list_year
 
-#%% read data
+#%% read 192391 IVS data with TimeDiff, Moneyness, Maturity, Dummy 
 
-df_info = pd.read_csv("E:/Spyder/IVS/aggre_vs_info.csv", skiprows = 0, index_col = 0)
+df_info = pd.read_csv("E:/Spyder/IVS/info_vs_aggre_2007to2017.csv", skiprows = 0, index_col = 0)
+
+
 df_info['Moneyness'] = abs(df_info['Moneyness'])
 df_info['TimeDiff'] = df_info['TimeDiff']/300
 df_info['IVS'] = abs(df_info['IVS'])
-
-info_corr = np.corrcoef(df_info['IVS'], df_info['TimeDiff'])
+df_info['SpriceDiff'] = abs(df_info['SpriceDiff'])
+#results = adfuller(df_info['IVS'], autolag='AIC')
+#print('ADF Statistic: %f' % results[0])
+#print('p-value: %f' % results[1])
+print("Corr:")
+info_corr = np.corrcoef(df_info['IVS'], df_info['SpriceDiff'])
 print(info_corr)
-print("kurtosis:%f"%kurtosis(df_info['IVS']))
-print("skewness:%f"%skew(df_info['IVS']))
-autocorr = df_info['IVS'].autocorr(lag=1)
-print(autocorr)
+print("Corr:")
+info_corr = np.corrcoef(df_info['TimeDiff'], df_info['SpriceDiff'])
+print(info_corr)
+print("Corr:")
+info_corr = np.corrcoef(df_info['TimeDiff'], df_info['IVS'])
+print(info_corr)
+#print("kurtosis:%f"%kurtosis(df_info['IVS']))
+#print("skewness:%f"%skew(df_info['IVS']))
+#autocorr = df_info['IVS'].autocorr(lag=1)
+#print(autocorr)
 
 #%% regression on IVS
 # The t-statistics are Newy-west adjusted. 
 
-results = sm.ols(formula = 'IVS ~ Moneyness', data =  df_info).fit(cov_type='HAC',cov_kwds={'maxlags':1})
+results = sm.ols(formula = 'IVS ~ TimeDiff + Moneyness + Maturity + C(Dummy) + SpriceDiff  ', data =  df_info).fit(cov_type='HAC',cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary())
 
-#%%
-plt.figure(figsize=(15,6))
-meanIVS = np.average(df_info['IVS'])
-stdIVS = np.std(df_info['IVS'])
-upp = meanIVS + 2*stdIVS
-low = meanIVS - 2*stdIVS
-plt.hist(x = df_info['IVS'], bins = 1000, range = [low, upp],  color='#0504aa')
-plt.grid(axis='y', alpha=0.75)
-plt.xlabel('Value')
-plt.ylabel('Frequency')
-plt.title('IVS')
+#%% plot the IVS
+#plt.figure(figsize=(15,6))
+#meanIVS = np.average(df_info['IVS'])
+#stdIVS = np.std(df_info['IVS'])
+#upp = meanIVS + 2*stdIVS
+#low = meanIVS - 2*stdIVS
+#plt.hist(x = df_info['IVS'], bins = 1000, range = [low, upp],  color='#0504aa')
+#plt.grid(axis='y', alpha=0.75)
+#plt.xlabel('Value')
+#plt.ylabel('Frequency')
+#plt.title('IVS')
 
 #%% read data
 df_SP = pd.read_csv("E:/Spyder/BMG/SPX_PUTCALL.csv", index_col = 0)
 list_SPXprice = [price for price in df_SP['SPX Price']]
-list_SPXreturn = []
+list_SPXreturn = [np.nan,]
 for i in range(1, len(list_SPXprice)):
     list_SPXreturn.append(np.log(list_SPXprice[i]/list_SPXprice[i-1]))
-list_SPXreturn.append(np.nan)
+
 df_IVS['SPX price'] = df_IVS.index.map(df_SP['SPX Price'])
-df_IVS['SPX return'] = list_SPXreturn
+df_SP['SPX_return'] = list_SPXreturn
+df_IVS['SPX return'] =  df_IVS.index.map(df_SP['SPX_return'])
 df_copy = df_IVS.copy()
 columns_name = ['t0830', 't0900', 't0930', 't1000', 
                 't1030', 't1100', 't1130', 't1200', 
@@ -190,10 +203,10 @@ columns_name = ['t0830', 't0900', 't0930', 't1000',
                 't1430', 't1500', 'SPX_price', 'SPX_return']
 df_copy.columns = columns_name
 df_copy.to_csv("E:/Spyder/IVS/copy.csv")
-df_copy = df_copy.iloc[755:, :]
+
 
 #%% regression on return
 df_change = pd.read_csv("E:/Spyder/IVS/IVS_change_2007.csv", index_col = 0)
-results = sm.ols(formula = 'SPX_return ~ t1030', data =  df_change, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
+results = sm.ols(formula = 'SPX_return ~ t0830', data =  df_copy, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary())

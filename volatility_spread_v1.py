@@ -39,6 +39,15 @@ for i in range(start_year, end_year + 1):
         else:
             list_year_and_month.append(str(i) +str(j))
             
+total_period = len(list_year_and_month)
+
+yearloc = []
+for i in range(total_period+1):
+    if i%12 == 0:
+        yearloc.append(i)                                      
+
+endyearloc = len(yearloc)
+            
 #Xero coupon bond           
 zcb = pd.read_csv("E:/Spyder/ZCB.csv")
 zcb_list = list(zcb['date'][:])
@@ -476,15 +485,6 @@ def one_period_vs(start_period, end_period):
     df_one_period_vs.columns = x_axis_hour
     return df_one_period_vs
 #%% Run the IVS
-total_period = len(list_year_and_month)
-
-yearloc = []
-for i in range(total_period+1):
-    if i%12 == 0:
-        yearloc.append(i)                                      
-
-endyearloc = len(yearloc)
-
 df_overall_vs = pd.DataFrame()
 #2007 is 4
 for i in range(4, endyearloc):
@@ -511,4 +511,57 @@ df_aggre_vs_info.to_csv("E:/Spyder/info_vs_aggre_2007to2017.csv")
 df_overall_vs.to_csv("E:/Spyder/vs_10days_mkdweighted_2007to2017.csv")
 plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 
+#%% Generate the intraday SPX500 price
 
+def half_hour_SPX(loc):
+    
+    S = float(df['UNDERLYING_INSTRUMENT_PRICE'][loc])
+    return S
+
+def SPX_price(start_period, end_period):
+    global hid_loc, dim_loc, dim_list
+    df_intraday_SPX = pd.DataFrame()
+    
+    for cym in range(start_period, end_period):
+        hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
+        
+        one_day_price = []
+        one_month_price = []
+        for i in range(len(hid_loc)):
+    
+            if i != len(hid_loc)-1:
+                if hid_loc[i] not in dim_loc: # 08:30~14:30
+                    loc = hid_loc[i]
+                    half_hour_price = half_hour_SPX(loc)
+                    one_day_price.append(half_hour_price)
+                    
+                else:  #15:00
+                    loc = hid_loc[i]
+                    one_month_price.append(one_day_price)
+                    one_day_price = []
+                    one_day_price.append(half_hour_SPX(loc))
+    
+            else:
+                
+                one_month_price.append(one_day_price)
+        # transfer 2-D lists to dataframe
+        # combine the one month_vs into one year vs 
+        df_one_month_price = pd.DataFrame(one_month_price)
+        df_one_month_price.index = dim_list
+        df_intraday_SPX = df_intraday_SPX.append(df_one_month_price)
+        
+    df_intraday_SPX.columns = x_axis_hour
+    return df_intraday_SPX
+#%%
+
+df_overall_price = pd.DataFrame()
+#2007 is 4
+for i in range(4, endyearloc):
+    period_start = yearloc[i-1] #Begin in 1
+    period_end = yearloc[i]
+    df_year_price = SPX_price(period_start, period_end)
+    plot_vs_by_halfhr(df_year_price, period_start, period_end)
+    df_overall_price = df_overall_price.append(df_year_price)
+    print("I finish a year!!")   
+#%%
+df_half = pd.DataFrame(df_overall_price)

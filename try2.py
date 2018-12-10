@@ -29,10 +29,9 @@ def missing_vs(day_token, one_day_vs, cym):
                 
     
         except IndexError: #If the day exists too many missing period, we exclude.
-            x = np.zeros(14 - len(one_day_vs), dtype=float)
-            x.fill(np.nan)
-            one_day_vs = list(x)
-            s = 1 #it is only a switch
+            one_day_vs.reverse()
+            one_day_vs.extend(repeat(np.nan, 14-len(one_day_vs)))
+            one_day_vs.reverse()
     
     if len(list_temp_day) == 14 and s != 1:    
         problem_loc = list_temp_day.index(0) # in this case, we assume there is only one problem in a day
@@ -44,3 +43,9 @@ def missing_vs(day_token, one_day_vs, cym):
 
         
     return one_day_vs
+
+#%%
+one_day_vs = [2,3,4,5,6,7,8,9]
+one_day_vs.reverse()
+one_day_vs.extend(repeat(np.nan, 14-len(one_day_vs)))
+one_day_vs.reverse()

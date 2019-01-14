@@ -17,7 +17,7 @@ from itertools import repeat
 #%% load the data from Mysql, ZCB
 config = {
     'user': 'admin',
-    'password': 'Ntunew123',
+    'password': 'Ntu830531',
     'host': '140.112.111.161'
 }
 #140.112.111.161
@@ -26,7 +26,7 @@ cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
 
 list_year_and_month = []
-start_year = 2008
+start_year = 2007
 end_year = 2017
 start_month = 1
 end_month = 12
@@ -48,16 +48,17 @@ for i in range(total_period+1):
 endyearloc = len(yearloc)
             
 #Xero coupon bond           
-zcb = pd.read_csv("E:/Spyder/ZCB.csv")
+zcb = pd.read_csv("E:/Spyder/import_csv/ZCB.csv")
 zcb_list = list(zcb['date'][:])
 
 #There are 14 time-period in one day
-time_period =  pd.read_csv("E:/Spyder/period_trade_Q.csv", header = None)
-time_period.columns = ['Middle']
+time_period =  pd.read_csv("E:/Spyder/import_csv/period_Quote.csv", header = None)
+time_period.columns = ['Head', 'Tail', 'Middle']
 
 # List the 14 time period for column names 
 x_axis_hour = [] #generate x axis
 for s in time_period['Middle']:
+
     if s < 100000: #Avoid the disorder in ploting the x-axis
         if not int((s % 10000)/100) == 0:
             x_axis_hour.append('0' + str(int(s/10000)) +':' + str(int((s % 10000)/100)))
@@ -335,7 +336,7 @@ def missing_vs(day_token, one_day_vs, cym):
     
     for i in range(day_begin_loc, tomorrow_loc):
         try:
-            if df['TRADE_TIME'][hid_loc[i]] == time_period['Middle'][list_j[i-day_begin_loc]]:
+            if df['TRADE_TIME'][hid_loc[i]] <= time_period['Tail'][list_j[i-day_begin_loc]] and df['TRADE_TIME'][hid_loc[i]] >= time_period['Head'][list_j[i-day_begin_loc]]:
                 list_temp_day.append(1)
         
             else:
@@ -361,7 +362,7 @@ def missing_vs(day_token, one_day_vs, cym):
     return one_day_vs
 
 #Black friday CBOE only works to 12:30
-black_friday = pd.read_csv("E:/Spyder/blackfriday.csv")
+black_friday = pd.read_csv("E:/Spyder/import_csv/blackfriday.csv")
 black_friday = list(black_friday['blackfriday'])
 
 def black_fri_vs(one_day_vs):
@@ -413,13 +414,13 @@ def hid_dim_loc(cym):
     for i in range(rc): 
         if df["TRADE_DATE"][i] == current_date:
     
-            if df["TRADE_TIME"][i] == time_period['Middle'][tpl]:
+            if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                 hour_period.append(tpl)
             else: 
                 hid_loc.append(i)
                 while tpl <= 14:
                     tpl = tpl + 1
-                    if df["TRADE_TIME"][i] == time_period['Middle'][tpl]:
+                    if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                         hour_period.append(tpl)
                         break
                     else:
@@ -433,12 +434,12 @@ def hid_dim_loc(cym):
             tpl = 0
             hid_loc.append(i)
             
-            if df["TRADE_TIME"][i] == time_period['Middle'][tpl]:
+            if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                 hour_period.append(tpl)
             else: 
                 while tpl <= 14:
                     tpl = tpl + 1
-                    if df["TRADE_TIME"][i] == time_period['Middle'][tpl]:
+                    if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                         hour_period.append(tpl)
                         break
                     else:
@@ -507,7 +508,7 @@ def one_period_vs(start_period, end_period):
 df_overall_vs = pd.DataFrame()
 
 #for i in range(4, endyearloc):
-for i in range(3, 4):
+for i in range(1, 2):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
     df_year_vs = one_period_vs(period_start, period_end)

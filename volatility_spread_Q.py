@@ -174,9 +174,13 @@ def KD_disc(S, K, t):
 def call_put_pair(start, end):
     pair_list = []
     pair_dic = {}
-
+    num_put_call = 0
+    num_call = 0
+    num_put = 0
+    
+    
     for i in range(start, end):
-
+        num_put_call = num_put_call + 1
 
         td = time_delta(df["TRADE_DATE"][i], df["EXPIRATION_DATE"][i]) #calulate the delta T
     
@@ -198,11 +202,14 @@ def call_put_pair(start, end):
             pair_dic[dict_key] = len(pair_dic)
             if df["PUT_CALL_CODE"][i] == "C":
                 pair_list.append([df.iloc[i], [], cur_vol, Bid, Ask, [], []])
+                num_call = num_call + 1
             if df["PUT_CALL_CODE"][i] == "P":
                 pair_list.append([[], df.iloc[i], cur_vol, [], [], Bid, Ask])
+                num_put = num_put + 1
                 
         else:
             if df['PUT_CALL_CODE'][i] == "C":
+                num_call = num_call + 1
                 if len(pair_list[pair_dic[dict_key]][0]) < 1:
                     pair_list[pair_dic[dict_key]][0] = df.iloc[i]
                     pair_list[pair_dic[dict_key]][2] = cur_vol
@@ -216,6 +223,7 @@ def call_put_pair(start, end):
                     pair_list[pair_dic[dict_key]][4] = Ask
                 
             if df["PUT_CALL_CODE"][i] == "P":
+                num_put = num_put + 1
                 if len(pair_list[pair_dic[dict_key]][1]) < 1:
                     pair_list[pair_dic[dict_key]][1] = df.iloc[i]
                     pair_list[pair_dic[dict_key]][2] = cur_vol
@@ -227,20 +235,29 @@ def call_put_pair(start, end):
                     
                 elif pair_list[pair_dic[dict_key]][1]['ASK_PRICE'] > df['ASK_PRICE'][i]: #choose lower ask price
                     pair_list[pair_dic[dict_key]][6] = Ask    
-                    
-    return pair_list
-#%% aggrgate vs information
+    
+    try:
+        spendtime = seconds_delta(df["TRADE_TIME"][start], df["TRADE_TIME"][end-1])
+    except KeyError:
+        spendtime = 0
+    
+    return pair_list, num_put_call, num_call, num_put, spendtime
+
+
+#%% aggrgate vs information and dispriptive statisitic
 aggre_vs_inform = []    
 def record_vs(vs_information):
     aggre_vs_inform.append(vs_information)
     return aggre_vs_inform
+
     
 #%% volatility spread per hour
 # vs wighted by MK discount
 def volatility_spread_hour(start, end):
     volatility_spread = []
     spread_volume = []
-    pair_list = call_put_pair(start, end)
+    pair_list, numpc, numc, nump, spendtime = call_put_pair(start, end)
+
     for i in range(len(pair_list)):
         if len(pair_list[i][0]) > 1 and len(pair_list[i][1]) > 1:
             S = float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE'])
@@ -252,7 +269,8 @@ def volatility_spread_hour(start, end):
             call_price = float((pair_list[i][3] + pair_list[i][4])/2)
             put_price = float((pair_list[i][5] + pair_list[i][6])/2)
             volume = MK_disc(S, K, t)
-
+            
+            timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
             dummy = dummy_hour(pair_list[i][0]['TRADE_TIME'])
             PV_K = K*exp(-r*t)
             intrinsic_c = fabs(max(S - PV_K, 0.0))
@@ -303,7 +321,7 @@ def volatility_spread_hour(start, end):
                 vol_spread = call_iv - put_iv
                 volatility_spread.append(vol_spread)
                 spread_volume.append(volume)
-                record_vs([vol_spread, moneyness, t, dummy])
+                record_vs([vol_spread, timediff, moneyness, t, dummy])
                 
         else:
             volatility_spread.append(0.0)
@@ -312,11 +330,11 @@ def volatility_spread_hour(start, end):
     try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
         hour_vs = np.average(volatility_spread, weights = weights_aggr)
-
+        
     except ZeroDivisionError:
         hour_vs = np.nan
 
-    return hour_vs
+    return hour_vs, numpc, numc, nump, spendtime
 
     
 #%% Deal with the v.s. missing due to time missing
@@ -410,6 +428,7 @@ def hid_dim_loc(cym):
     dim_loc = [] #record every different day in df
     hid_loc = [0] #record every differnet hour in df
     rc = len(df) #whole rows
+    df_quant(rc)
 
     for i in range(rc): 
         if df["TRADE_DATE"][i] == current_date:
@@ -456,26 +475,37 @@ def hid_dim_loc(cym):
     
 def one_period_vs(start_period, end_period):
     global hid_loc, dim_loc, dim_list, df
-    df_one_period_vs = pd.DataFrame()
-    
+    df_one_period_vs = pd.DataFrame() #volatility Spread
+    df_one_period_npc = pd.DataFrame() #number of puts and calls
+    df_one_period_nc = pd.DataFrame() #number of calls 
+    df_one_period_np = pd.DataFrame() #number of puts
+    df_one_period_ts = pd.DataFrame() #time spread
     for cym in range(start_period, end_period):
         hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
     
         one_day_vs = []
         one_month_vs = []
+        one_day_npc = []
+        one_month_npc = []
+        one_day_nc = []
+        one_month_nc = []
+        one_day_np = []
+        one_month_np = []
+        one_day_ts = []
+        one_month_ts = []        
         for i in range(len(hid_loc)):
-    
+            
             if i != len(hid_loc)-1:
                 if hid_loc[i] not in dim_loc: # 08:30~14:30
                     start = hid_loc[i]
                     end = hid_loc[i+1]
-                    print("-------------------")
-                    print(df["TRADE_TIME"][start])
-                    
-                    print('存在筆數:%i' % (end - start))
-                    print("-------------------")
-                    hour_vs = volatility_spread_hour(start, end)
+                    hour_vs, numpc, numc, nump, spendtime = volatility_spread_hour(start, end)
+
                     one_day_vs.append(hour_vs)
+                    one_day_npc.append(numpc)
+                    one_day_nc.append(numc)
+                    one_day_np.append(nump)
+                    one_day_ts.append(spendtime)
                 else:  #15:00
                     if not len(one_day_vs) == 14:
 
@@ -490,46 +520,94 @@ def one_period_vs(start_period, end_period):
                     start = hid_loc[i]
                     end = hid_loc[i+1]
                     one_month_vs.append(one_day_vs)
+                    one_month_npc.append(one_day_npc)
+                    one_month_nc.append(one_day_nc)
+                    one_month_np.append(one_day_np)
+                    one_month_ts.append(one_day_ts)
+                    
+                    hour_vs, numpc, numc, nump, spendtime = volatility_spread_hour(start, end)
+
                     one_day_vs = []
-                    one_day_vs.append(volatility_spread_hour(start, end))
+                    one_day_vs.append(hour_vs)
+                    one_day_npc = []
+                    one_day_npc.append(numpc)
+                    one_day_nc = []
+                    one_day_nc.append(numc)
+                    one_day_np = []
+                    one_day_np.append(nump)
+                    one_day_ts = []
+                    one_day_ts.append(spendtime)
     
             else:
                 
                 one_month_vs.append(one_day_vs)
+                one_month_npc.append(one_day_npc)
+                one_month_nc.append(one_day_nc)
+                one_month_np.append(one_day_np)
+                one_month_ts.append(one_day_ts)
         # transfer 2-D lists to dataframe
         # combine the one month_vs into one year vs 
         df_one_month_vs = pd.DataFrame(one_month_vs)
         df_one_month_vs.index = dim_list
         df_one_period_vs = df_one_period_vs.append(df_one_month_vs)
         
+        df_one_month_npc = pd.DataFrame(one_month_npc)
+        df_one_month_npc.index = dim_list
+        df_one_period_npc = df_one_period_npc.append(df_one_month_npc)
+
+        df_one_month_nc = pd.DataFrame(one_month_nc)
+        df_one_month_nc.index = dim_list
+        df_one_period_nc = df_one_period_nc.append(df_one_month_nc)
+
+        df_one_month_np = pd.DataFrame(one_month_np)
+        df_one_month_np.index = dim_list
+        df_one_period_np = df_one_period_np.append(df_one_month_np)
+    
+        df_one_month_ts = pd.DataFrame(one_month_ts)
+        df_one_month_ts.index = dim_list
+        df_one_period_ts = df_one_period_ts.append(df_one_month_ts)
+
+        
     df_one_period_vs.columns = x_axis_hour
-    return df_one_period_vs
+    df_one_period_npc.columns = x_axis_hour
+    df_one_period_np.columns = x_axis_hour
+    df_one_period_nc.columns = x_axis_hour
+    df_one_period_ts.columns = x_axis_hour
+    
+    return df_one_period_vs, df_one_period_npc, df_one_period_nc, df_one_period_np, df_one_period_ts
+
+#%% calculate the df and pair_option quantity
+
+overall_rc = 0
+def df_quant(rc):
+    global overall_rc
+    overall_rc = overall_rc + rc
+    return overall_rc   
+
 #%% Run the IVS
 df_overall_vs = pd.DataFrame()
 
-#for i in range(4, endyearloc):
-for i in range(1, 2):
+for i in range(1, endyearloc):
     period_start = yearloc[i-1] #Begin in 1
     period_end = yearloc[i]
-    df_year_vs = one_period_vs(period_start, period_end)
+#    period_start = 1 #Begin in 1
+#    period_end = 2    
+
+    df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
     plot_vs_by_halfhr(df_year_vs, period_start, period_end)
     df_overall_vs = df_overall_vs.append(df_year_vs)
     print("I finish a year!!")
-#%%
-#period_start = yearloc[10-1] 
-#period_end = yearloc[10]
-#df_year_vs = one_period_vs(period_start, period_end)   
-#plot_vs_by_halfhr(df_year_vs, period_start, period_end)
 
 #%% Store the file
 
 df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
-info_aggre_columns_name = ['IVS', 'Moneyness', 'Maturity', 'Dummy']
+info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
 df_aggre_vs_info.columns = info_aggre_columns_name
-#df_aggre_vs_info.to_csv("E:/Spyder/info_vs_aggre_2007to2017.csv")
-#
-#df_overall_vs.to_csv("E:/Spyder/vs_10days_mkdweighted_2007to2017.csv")
 plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
+
+df_aggre_vs_info.to_csv("C:/Users/Evan/Documents/GitHub/Volatility-spread/Quote_csv/info_vs_2007to2017.csv")
+df_overall_vs.to_csv("C:/Users/Evan/Documents/GitHub/Volatility-spread/Quote_csv/vs_mkdweighted_2007to2017.csv")
+
 
 #%% Generate the intraday SPX500 price
 
@@ -576,15 +654,15 @@ def SPX_price(start_period, end_period):
 
 #df_overall_price = pd.DataFrame()
 ##assume 
-#endyearloc = 2 
-#
 #for i in range(1, endyearloc):
 #    period_start = yearloc[i-1] #Begin in 1
 #    period_end = yearloc[i]
+##    period_start = 1 #Begin in 1
+##    period_end = 2    
 #    df_year_price = SPX_price(period_start, period_end)
-#    plot_vs_by_halfhr(df_year_price, period_start, period_end)
 #    df_overall_price = df_overall_price.append(df_year_price)
-#    print("I finish a year!!")   
-##%%
+  
+#%%
 #df_SPX_hh = pd.DataFrame(df_overall_price)
+#df_SPX_hh.to_csv("C:/Users/Evan/Documents/GitHub/Volatility-spread/Quote_csv/SPX_hh.csv")
 

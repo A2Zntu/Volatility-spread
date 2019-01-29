@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Dec 27 22:19:48 2018
+Created on Sun Oct  7 23:39:57 2018
 
 @author: Evan
 """
+
 import mysql.connector
 from mysql.connector.constants import ClientFlag
 import pandas as pd
@@ -16,8 +17,8 @@ from itertools import repeat
 
 #%% load the data from Mysql, ZCB
 config = {
-    'user': 'root',
-    'password': 'Ntu830531',
+    'user': 'admin',
+    'password': 'Ntunew123',
     'host': 'localhost'
 }
 #140.112.111.161
@@ -26,7 +27,7 @@ cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
 
 list_year_and_month = []
-start_year = 2007
+start_year = 2004
 end_year = 2017
 start_month = 1
 end_month = 12
@@ -48,17 +49,16 @@ for i in range(total_period+1):
 endyearloc = len(yearloc)
             
 #Xero coupon bond           
-zcb = pd.read_csv("E:/Spyder/import_csv/ZCB.csv")
+zcb = pd.read_csv("E:/Spyder/ZCB.csv")
 zcb_list = list(zcb['date'][:])
 
 #There are 14 time-period in one day
-time_period =  pd.read_csv("E:/Spyder/import_csv/period_Quote.csv", header = None)
-time_period.columns = ['Head', 'Tail', 'Middle']
+time_period =  pd.read_csv("E:/Spyder/period_trade_1.csv", header = None)
+time_period.columns = ['Head', 'Tail', 'Fake_middle', 'Middle']
 
 # List the 14 time period for column names 
 x_axis_hour = [] #generate x axis
 for s in time_period['Middle']:
-
     if s < 100000: #Avoid the disorder in ploting the x-axis
         if not int((s % 10000)/100) == 0:
             x_axis_hour.append('0' + str(int(s/10000)) +':' + str(int((s % 10000)/100)))
@@ -74,7 +74,7 @@ x_axis_hour = np.array(x_axis_hour)
 #%% read the data
 
 def sql_df(cym):
-    sql = "SELECT * FROM evan4.mdr_trade" + list_year_and_month[cym]
+    sql = "SELECT * FROM evan.mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
     results = cursor.fetchall() 
     results = list(results)       
@@ -82,15 +82,12 @@ def sql_df(cym):
     df = pd.DataFrame(results, columns = ["SERIES_SEQ_NBR", "TRADE_DATE", 
                                           "TRADE_TIME",  
                                           "EXPIRATION_DATE", "PUT_CALL_CODE", 
-                                          "EXERCISE_PRICE", 
-                                          "BID_PRICE", "BID_SIZE", 
-                                          "ASK_PRICE", "ASK_SIZE",
-                                          "UNDERLYING_INSTRUMENT_PRICE", 
-                                          "PERIOD_TIME"])
+                                          "EXERCISE_PRICE", "TRADE_PRICE", 
+                                          "TRADE_SIZE",  
+                                          "UNDERLYING_INSTRUMENT_PRICE"])
     
     df = df.sort_values(['TRADE_DATE','TRADE_TIME', 'EXPIRATION_DATE', 'EXERCISE_PRICE', 'PUT_CALL_CODE'], ascending=[True,True,True,True,True])
     df = df.reset_index(drop=True)
-
     return df
 
 #%% time_gap 
@@ -115,7 +112,7 @@ def seconds_delta(start_time, end_time):
 def dummy_hour(the_time):
     dummy = 0
     for i in range(len(time_period)):
-        if the_time == time_period['Middle'][i]:
+        if the_time >= time_period['Head'][i] and the_time < time_period['Tail'][i]:
             dummy = i
     return dummy
 
@@ -175,14 +172,12 @@ def KD_disc(S, K, t):
 def call_put_pair(start, end):
     pair_list = []
     pair_dic = {}
-    num_put_call = 0
-    num_call = 0
-    num_put = 0
-    
-    
+    df["Dist"] = np.nan
     for i in range(start, end):
-        num_put_call = num_put_call + 1
-
+        #calaulate the time-distance for each tick
+        dist = seconds_delta(df['TRADE_TIME'][i], time_period['Middle'][hour_period[i]])
+            
+        df.loc[i,'Dist'] = dist
         td = time_delta(df["TRADE_DATE"][i], df["EXPIRATION_DATE"][i]) #calulate the delta T
     
         dict_key = "K:"+ str(df["EXERCISE_PRICE"][i])+"/"+"T:" +str(td)
@@ -195,129 +190,101 @@ def call_put_pair(start, end):
         K = float(df['EXERCISE_PRICE'][i])
         t = time_delta(df['TRADE_DATE'][i], df['EXPIRATION_DATE'][i])
         cur_vol = MK_disc(S, K, t)
-        Bid = float(df['BID_PRICE'][i])
-        Ask = float(df['ASK_PRICE'][i])
 #-------------------------------------------------------------------------
         if dict_key not in pair_dic:
 
             pair_dic[dict_key] = len(pair_dic)
             if df["PUT_CALL_CODE"][i] == "C":
-                pair_list.append([df.iloc[i], [], cur_vol, Bid, Ask, [], []])
-                num_call = num_call + 1
+                pair_list.append([df.iloc[i], [], cur_vol])
             if df["PUT_CALL_CODE"][i] == "P":
-                pair_list.append([[], df.iloc[i], cur_vol, [], [], Bid, Ask])
-                num_put = num_put + 1
+                pair_list.append([[], df.iloc[i], cur_vol])
                 
         else:
             if df['PUT_CALL_CODE'][i] == "C":
-                num_call = num_call + 1
                 if len(pair_list[pair_dic[dict_key]][0]) < 1:
                     pair_list[pair_dic[dict_key]][0] = df.iloc[i]
-                    pair_list[pair_dic[dict_key]][2] = cur_vol
-                    pair_list[pair_dic[dict_key]][3] = Bid
-                    pair_list[pair_dic[dict_key]][4] = Ask
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
                     
-                elif pair_list[pair_dic[dict_key]][0]['BID_PRICE'] < df['BID_PRICE'][i]:#choose higher bid price
-                    pair_list[pair_dic[dict_key]][3] = Bid
-                    
-                elif pair_list[pair_dic[dict_key]][0]['ASK_PRICE'] > df['ASK_PRICE'][i]: #choose lower ask price
-                    pair_list[pair_dic[dict_key]][4] = Ask
+                elif pair_list[pair_dic[dict_key]][0]['Dist'] > df['Dist'][i]:
+                    pair_list[pair_dic[dict_key]][0] = df.iloc[i]
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
+                else:
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
                 
             if df["PUT_CALL_CODE"][i] == "P":
-                num_put = num_put + 1
                 if len(pair_list[pair_dic[dict_key]][1]) < 1:
                     pair_list[pair_dic[dict_key]][1] = df.iloc[i]
-                    pair_list[pair_dic[dict_key]][2] = cur_vol
-                    pair_list[pair_dic[dict_key]][5] = Bid
-                    pair_list[pair_dic[dict_key]][6] = Ask
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
                     
-                elif pair_list[pair_dic[dict_key]][1]['BID_PRICE'] < df['BID_PRICE'][i]:#choose higher bid price
-                    pair_list[pair_dic[dict_key]][5] = Bid
-                    
-                elif pair_list[pair_dic[dict_key]][1]['ASK_PRICE'] > df['ASK_PRICE'][i]: #choose lower ask price
-                    pair_list[pair_dic[dict_key]][6] = Ask    
+                elif pair_list[pair_dic[dict_key]][1]['Dist'] > df['Dist'][i]:
+                    pair_list[pair_dic[dict_key]][1] = df.iloc[i]
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
+                else:
+                    pair_list[pair_dic[dict_key]][2] = pair_list[pair_dic[dict_key]][2] + cur_vol
     
-    try:
-        spendtime = seconds_delta(df["TRADE_TIME"][start], df["TRADE_TIME"][end-1])
-    except KeyError:
-        spendtime = 0
-    
-    return pair_list, num_put_call, num_call, num_put, spendtime
-
-
-#%% aggrgate vs information and dispriptive statisitic
+    return pair_list
+#%% aggrgate vs information
 aggre_vs_inform = []    
 def record_vs(vs_information):
     aggre_vs_inform.append(vs_information)
     return aggre_vs_inform
-
     
 #%% volatility spread per hour
 # vs wighted by MK discount
 def volatility_spread_hour(start, end):
     volatility_spread = []
     spread_volume = []
-    pair_list, numpc, numc, nump, spendtime = call_put_pair(start, end)
-    a = 0
-    b = 0
-    c = 0
-    d = 0
-    e = 0
-    f = 0
+    pair_list = call_put_pair(start, end)
     for i in range(len(pair_list)):
-        a = a + 1
         if len(pair_list[i][0]) > 1 and len(pair_list[i][1]) > 1:
-            S = min(float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE']),
-                    float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])) #choose small S for intrinsic_c
+            Sc = float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE'])
+            Sp = float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])
+            Sa = (Sc+Sp)/2.0
             r = zcb_rate(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])
                 
             K = float(pair_list[i][0]['EXERCISE_PRICE'])
             t = time_delta(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])/365
             q = 0
-            call_price = float((pair_list[i][3] + pair_list[i][4])/2)
-            put_price = float((pair_list[i][5] + pair_list[i][6])/2)
-            volume = MK_disc(S, K, t)
-            
+            call_price = float(pair_list[i][0]['TRADE_PRICE'])
+            put_price = float(pair_list[i][1]['TRADE_PRICE'])
+            vol = MK_disc(Sa, K, t)
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
             dummy = dummy_hour(pair_list[i][0]['TRADE_TIME'])
             PV_K = K*exp(-r*t)
+            intrinsic_c = fabs(max(Sc - PV_K, 0.0))
+            intrinsic_p = fabs(max(PV_K - Sp, 0.0))
 
-            intrinsic_c = fabs(max(S - PV_K, 0.0))
-            intrinsic_p = fabs(max(PV_K - S, 0.0))
-            
-            if S != 0:
-                moneyness = float(K/S - 1) #As for put, it's the level of ITM; for call, OTM.             
+            if Sa != 0:
+                moneyness = float(K/Sa - 1) #As for put, it's the level of ITM; for call, OTM.             
+                Sprice_diff = (Sc - Sp)/(Sa)
             else:
                 moneyness = 0
+                Sprice_diff = 0
                 
             if t < 10/365: #eliminate the option with expiration less than 30 days
-                c = c+1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
             elif call_price < intrinsic_c:
-                d = d + 1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
     
-            elif call_price >= S or put_price >= PV_K:
-                e = e + 1
+            elif call_price >= Sc or put_price >= PV_K:
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
             elif put_price < intrinsic_p:
-                f = f +1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)                
             
-            elif S == 0 : #typo error
+            elif Sc == 0 or Sp == 0: #typo error
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0) 
                 
             else:
                 call_iv = iv(price = call_price, 
                              flag = 'c', 
-                             S = S, 
+                             S = Sc, 
                              K = K, 
                              t = t, 
                              r = r,
@@ -325,7 +292,7 @@ def volatility_spread_hour(start, end):
                 
                 put_iv = iv(price = put_price, 
                              flag = 'p', 
-                             S = S, 
+                             S = Sp, 
                              K = K, 
                              t = t, 
                              r = r,
@@ -333,53 +300,22 @@ def volatility_spread_hour(start, end):
                 
                 vol_spread = call_iv - put_iv
                 volatility_spread.append(vol_spread)
-                spread_volume.append(volume)
-                record_vs([vol_spread, timediff, moneyness, t, dummy])
+                spread_volume.append(vol)
+                record_vs([vol_spread, timediff, moneyness, t, dummy,  Sprice_diff])
                 
         else:
-            b = b + 1
             volatility_spread.append(0.0)
             spread_volume.append(0.0)
-    
-    if a != 0:
-        rate1 = b/a #due to no match 
-        no_match(rate1)
-        rate2 = d/a #due to call lower bound
-        call_lbnd(rate2)
-        rate3 = c/a
-        lessthan10days(rate3)
+            
     try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
         hour_vs = np.average(volatility_spread, weights = weights_aggr)
         
     except ZeroDivisionError:
         hour_vs = np.nan
-    
-    show_pl(pair_list)
-    print("總PAIR:%i"%a)
-    print("Match不到%i"%b)
-    print("到期日小於十天%i"%c)
-    print("Call價格不合%i"%d)
-    print("CALL PUT價格不合%i"%f)
-    print("PUT價格不合%i"%f)
-    print("==========")
-    return hour_vs, numpc, numc, nump, spendtime
 
-no_match_rate = []
-def no_match(rate):
-    no_match_rate.append(rate)
+    return hour_vs
 
-call_lbnd_rate = []
-def call_lbnd(rate):
-    call_lbnd_rate.append(rate)
-    
-less_than_10days = []
-def lessthan10days(rate):
-    less_than_10days.append(rate)
-
-pair_list = []
-def show_pl(pl):
-    pair_list.append(pl)
     
 #%% Deal with the v.s. missing due to time missing
 
@@ -424,7 +360,7 @@ def missing_vs(day_token, one_day_vs, cym):
     return one_day_vs
 
 #Black friday CBOE only works to 12:30
-black_friday = pd.read_csv("E:/Spyder/import_csv/blackfriday.csv")
+black_friday = pd.read_csv("E:/Spyder/blackfriday.csv")
 black_friday = list(black_friday['blackfriday'])
 
 def black_fri_vs(one_day_vs):
@@ -463,32 +399,24 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 def hid_dim_loc(cym):
     print("Now, we are in: %s"%list_year_and_month[cym])
     global df, hour_period
-    tpl = 0
     df = sql_df(cym)
     current_date = df["TRADE_DATE"][0]
     tpl = 0 #time period location
-    hour_period = [] #record every tick belongs to which hour
+    hour_period = []
     dim_list = [df["TRADE_DATE"][0]]
-    dim_loc = [] #record every different day in df
-    hid_loc = [0] #record every differnet hour in df
-    rc = len(df) #whole rows
-    df_quant(rc)
-
+    dim_loc = [] #days in one month 
+    hid_loc = [0] #hours in one day
+    rc = len(df)
     for i in range(rc): 
         if df["TRADE_DATE"][i] == current_date:
     
             if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                 hour_period.append(tpl)
-
             else: 
+                tpl = tpl + 1
+                hour_period.append(tpl)
                 hid_loc.append(i)
-                while tpl <= 14:
-                    tpl = tpl + 1
-                    if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
-                        hour_period.append(tpl)
-                        break
-                    else:
-                        pass
+                
     
             
         elif df["TRADE_DATE"][i] != current_date:
@@ -501,13 +429,8 @@ def hid_dim_loc(cym):
             if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
                 hour_period.append(tpl)
             else: 
-                while tpl <= 14:
-                    tpl = tpl + 1
-                    if df["TRADE_TIME"][i] >= time_period['Head'][tpl] and df["TRADE_TIME"][i] <= time_period['Tail'][tpl]:
-                        hour_period.append(tpl)
-                        break
-                    else:
-                        pass
+                tpl = tpl + 1
+                hour_period.append(tpl)
     
     # attach the final index of df           
     hid_loc.append(rc)
@@ -519,142 +442,75 @@ def hid_dim_loc(cym):
 #%% Main Code
     
 def one_period_vs(start_period, end_period):
-    global hid_loc, dim_loc, dim_list, df
-    df_one_period_vs = pd.DataFrame() #volatility Spread
-    df_one_period_npc = pd.DataFrame() #number of puts and calls
-    df_one_period_nc = pd.DataFrame() #number of calls 
-    df_one_period_np = pd.DataFrame() #number of puts
-    df_one_period_ts = pd.DataFrame() #time spread
+    global hid_loc, dim_loc, dim_list
+    df_one_period_vs = pd.DataFrame()
+    
     for cym in range(start_period, end_period):
         hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
     
         one_day_vs = []
         one_month_vs = []
-        one_day_npc = []
-        one_month_npc = []
-        one_day_nc = []
-        one_month_nc = []
-        one_day_np = []
-        one_month_np = []
-        one_day_ts = []
-        one_month_ts = []        
         for i in range(len(hid_loc)):
-            
+    
             if i != len(hid_loc)-1:
                 if hid_loc[i] not in dim_loc: # 08:30~14:30
                     start = hid_loc[i]
                     end = hid_loc[i+1]
-                    hour_vs, numpc, numc, nump, spendtime = volatility_spread_hour(start, end)
-
+                    hour_vs = volatility_spread_hour(start, end)
                     one_day_vs.append(hour_vs)
-                    one_day_npc.append(numpc)
-                    one_day_nc.append(numc)
-                    one_day_np.append(nump)
-                    one_day_ts.append(spendtime)
                 else:  #15:00
                     if not len(one_day_vs) == 14:
-
+    
                         if not df["TRADE_DATE"][start] in black_friday:
                             print(dim_loc.index(hid_loc[i]))
                             print("== MOM! I am in the Area.==")
                             one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs, cym)
-
                             
                         else:
                             one_day_vs = black_fri_vs(one_day_vs)
                     start = hid_loc[i]
                     end = hid_loc[i+1]
                     one_month_vs.append(one_day_vs)
-                    one_month_npc.append(one_day_npc)
-                    one_month_nc.append(one_day_nc)
-                    one_month_np.append(one_day_np)
-                    one_month_ts.append(one_day_ts)
-                    
-                    hour_vs, numpc, numc, nump, spendtime = volatility_spread_hour(start, end)
-
                     one_day_vs = []
-                    one_day_vs.append(hour_vs)
-                    one_day_npc = []
-                    one_day_npc.append(numpc)
-                    one_day_nc = []
-                    one_day_nc.append(numc)
-                    one_day_np = []
-                    one_day_np.append(nump)
-                    one_day_ts = []
-                    one_day_ts.append(spendtime)
+                    one_day_vs.append(volatility_spread_hour(start, end))
     
             else:
                 
                 one_month_vs.append(one_day_vs)
-                one_month_npc.append(one_day_npc)
-                one_month_nc.append(one_day_nc)
-                one_month_np.append(one_day_np)
-                one_month_ts.append(one_day_ts)
         # transfer 2-D lists to dataframe
         # combine the one month_vs into one year vs 
         df_one_month_vs = pd.DataFrame(one_month_vs)
         df_one_month_vs.index = dim_list
         df_one_period_vs = df_one_period_vs.append(df_one_month_vs)
         
-        df_one_month_npc = pd.DataFrame(one_month_npc)
-        df_one_month_npc.index = dim_list
-        df_one_period_npc = df_one_period_npc.append(df_one_month_npc)
-
-        df_one_month_nc = pd.DataFrame(one_month_nc)
-        df_one_month_nc.index = dim_list
-        df_one_period_nc = df_one_period_nc.append(df_one_month_nc)
-
-        df_one_month_np = pd.DataFrame(one_month_np)
-        df_one_month_np.index = dim_list
-        df_one_period_np = df_one_period_np.append(df_one_month_np)
-    
-        df_one_month_ts = pd.DataFrame(one_month_ts)
-        df_one_month_ts.index = dim_list
-        df_one_period_ts = df_one_period_ts.append(df_one_month_ts)
-
-        
     df_one_period_vs.columns = x_axis_hour
-    df_one_period_npc.columns = x_axis_hour
-    df_one_period_np.columns = x_axis_hour
-    df_one_period_nc.columns = x_axis_hour
-    df_one_period_ts.columns = x_axis_hour
-    
-    return df_one_period_vs, df_one_period_npc, df_one_period_nc, df_one_period_np, df_one_period_ts
-
-#%% calculate the df and pair_option quantity
-
-overall_rc = 0
-def df_quant(rc):
-    global overall_rc
-    overall_rc = overall_rc + rc
-    return overall_rc   
-
+    return df_one_period_vs
 #%% Run the IVS
 df_overall_vs = pd.DataFrame()
-
-for i in range(6, 7):
-    period_start = 72#Begin in 1
-    period_end = 73
-#    period_start = 16 #Begin in 1
-#    period_end = 17    
-
-    df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
+#2007 is 4
+#for i in range(4, endyearloc):
+for i in range(4, 5):
+    period_start = yearloc[i-1] #Begin in 1
+    period_end = yearloc[i]
+    df_year_vs = one_period_vs(period_start, period_end)
     plot_vs_by_halfhr(df_year_vs, period_start, period_end)
     df_overall_vs = df_overall_vs.append(df_year_vs)
     print("I finish a year!!")
+#%%
+#period_start = yearloc[10-1] 
+#period_end = yearloc[10]
+#df_year_vs = one_period_vs(period_start, period_end)   
+#plot_vs_by_halfhr(df_year_vs, period_start, period_end)
 
 #%% Store the file
 
-#df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
-#info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
-#df_aggre_vs_info.columns = info_aggre_columns_name
-#plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
+df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
+info_aggre_columns_name = ['IVS', 'TimeDiff', 'Moneyness', 'Maturity', 'Dummy', 'SpriceDiff']
+df_aggre_vs_info.columns = info_aggre_columns_name
+#df_aggre_vs_info.to_csv("E:/Spyder/info_vs_aggre_2007to2017_Sa.csv")
 #
-#LAB_address = 'C:/Users/user/Documents/GitHub/Volatility-spread'
-#
-#df_aggre_vs_info.to_csv(LAB_address + "/Quote_csv/info_vs_2007to2017.csv")
-#df_overall_vs.to_csv(LAB_address + "/Quote_csv/vs_mkdweighted_2007to2017.csv")
-
+#df_overall_vs.to_csv("E:/Spyder/vs_10days_equalweighted_2007to2017.csv")
+plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
 
 #%% Generate the intraday SPX500 price
 
@@ -700,16 +556,14 @@ def SPX_price(start_period, end_period):
 #%%
 
 #df_overall_price = pd.DataFrame()
-##assume 
-#for i in range(1, endyearloc):
+##2007 is 4
+#for i in range(4, endyearloc):
 #    period_start = yearloc[i-1] #Begin in 1
 #    period_end = yearloc[i]
-##    period_start = 1 #Begin in 1
-##    period_end = 2    
 #    df_year_price = SPX_price(period_start, period_end)
+#    plot_vs_by_halfhr(df_year_price, period_start, period_end)
 #    df_overall_price = df_overall_price.append(df_year_price)
-  
-#%%
+#    print("I finish a year!!")   
+##%%
 #df_SPX_hh = pd.DataFrame(df_overall_price)
-#df_SPX_hh.to_csv("C:/Users/Evan/Documents/GitHub/Volatility-spread/Quote_csv/SPX_hh.csv")
-
+#df_SPX_hh.to_csv("E:/Spyder/info/Half_hour_SPX.csv")

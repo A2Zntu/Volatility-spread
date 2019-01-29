@@ -7,13 +7,13 @@ Created on Wed Nov  7 14:42:11 2018
 
 import os, shutil, glob
 
-path = 'E:/SPXintra/'
+path = 'D:/SPXintra/'
 
 
 list_year_and_month = []
 list_year = []
-start_year = 2015
-end_year = 2017
+start_year = 2009
+end_year = 2010
 start_month = 1
 end_month = 12
 
@@ -34,7 +34,7 @@ for i, year in enumerate(range(start_year,end_year)):
 
 
 list_number = []            
-for i in range(14):
+for i in range(1):
     list_hi = []
     for j in range(i*12,(i+1)*12):
         list_hi.append(j)
@@ -53,7 +53,7 @@ def right_dir(year, res):
     
 
 
-extension = 'gz'
+extension = 'csv'
 
 for i, year in enumerate(range(start_year, end_year)):
     os.chdir(path + str(year))

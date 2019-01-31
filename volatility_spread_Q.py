@@ -13,8 +13,9 @@ from py_vollib.black_scholes_merton.implied_volatility import implied_volatility
 from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
 from itertools import repeat
+import os
 
-#%% load the data from Mysql, ZCB
+#%%
 config = {
     'user': 'root',
     'password': 'Ntu830531',
@@ -25,56 +26,65 @@ config = {
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
 
-list_year_and_month = []
-start_year = 2007
-end_year = 2017
-start_month = 1
-end_month = 12
+#%% load the data from Mysql, ZCB
+def load_prepared_data(first_year, end_year):
+    'Load ZCB data and produce the list of year and month'
+    work_dir = os.getcwd()
+    Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
 
-for i in range(start_year, end_year + 1):
-    for j in range(start_month, end_month + 1):
-        if j < 10:
-            list_year_and_month.append(str(i) + '0' + str(j))
+    
+    list_year_and_month = []
+    start_year = 2007
+    end_year = 2017
+    start_month = 1
+    end_month = 12
+    
+    for i in range(start_year, end_year + 1):
+        for j in range(start_month, end_month + 1):
+            if j < 10:
+                list_year_and_month.append(str(i) + '0' + str(j))
+            else:
+                list_year_and_month.append(str(i) +str(j))
+                
+    total_period = len(list_year_and_month)
+    
+    yearloc = []
+    for i in range(total_period+1):
+        if i%12 == 0:
+            yearloc.append(i)                                      
+    
+    endyearloc = len(yearloc)
+                
+    #Zero coupon bond           
+    zcb = pd.read_csv(Path_default_readcsv + "\ZCB.csv")
+    zcb_list = list(zcb['date'][:])
+    
+    #There are 14 time-period in one day
+    time_period =  pd.read_csv(Path_default_readcsv + "\period_Quote.csv", header = None)
+    time_period.columns = ['Head', 'Tail', 'Middle']
+    
+    # List the 14 time period for column names 
+    x_axis_hour = [] #generate x axis
+    for s in time_period['Middle']:
+    
+        if s < 100000: #Avoid the disorder in ploting the x-axis
+            if not int((s % 10000)/100) == 0:
+                x_axis_hour.append('0' + str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+            else:
+                x_axis_hour.append('0' + str(int(s/10000)) +':00')
         else:
-            list_year_and_month.append(str(i) +str(j))
-            
-total_period = len(list_year_and_month)
+            if not int((s % 10000)/100) == 0:
+                x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
+            else:
+                x_axis_hour.append(str(int(s/10000)) +':00')
+    x_axis_hour = np.array(x_axis_hour)
+    return  zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc
 
-yearloc = []
-for i in range(total_period+1):
-    if i%12 == 0:
-        yearloc.append(i)                                      
-
-endyearloc = len(yearloc)
-            
-#Xero coupon bond           
-zcb = pd.read_csv("E:/Spyder/import_csv/ZCB.csv")
-zcb_list = list(zcb['date'][:])
-
-#There are 14 time-period in one day
-time_period =  pd.read_csv("E:/Spyder/import_csv/period_Quote.csv", header = None)
-time_period.columns = ['Head', 'Tail', 'Middle']
-
-# List the 14 time period for column names 
-x_axis_hour = [] #generate x axis
-for s in time_period['Middle']:
-
-    if s < 100000: #Avoid the disorder in ploting the x-axis
-        if not int((s % 10000)/100) == 0:
-            x_axis_hour.append('0' + str(int(s/10000)) +':' + str(int((s % 10000)/100)))
-        else:
-            x_axis_hour.append('0' + str(int(s/10000)) +':00')
-    else:
-        if not int((s % 10000)/100) == 0:
-            x_axis_hour.append(str(int(s/10000)) +':' + str(int((s % 10000)/100)))
-        else:
-            x_axis_hour.append(str(int(s/10000)) +':00')
-x_axis_hour = np.array(x_axis_hour)
-
-#%% read the data
-
+#%% 
 def sql_df(cym):
-    sql = "SELECT * FROM evan4.mdr_trade" + list_year_and_month[cym]
+    'read the data from SQL'
+    SQL_database = 'evan4'
+    sql = "SELECT * FROM " + SQL_database + ".mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
     results = cursor.fetchall() 
     results = list(results)       
@@ -95,6 +105,7 @@ def sql_df(cym):
 
 #%% time_gap 
 def time_delta(start_time, end_time):
+    'Compute the distance between two TRADE_DATEs'
     s = start_time
     e = end_time
     date_time0 = date(year = int(s/10000), month = int((s % 10000)/100), day = int(s % 100))
@@ -104,6 +115,7 @@ def time_delta(start_time, end_time):
     return delta_t
 
 def seconds_delta(start_time, end_time):
+    'Compute the distance between two TRADE_TIMEs'
     s = start_time
     e = end_time
     minute_time0 = time(hour = int(s/10000), minute = int((s % 10000)/100), second = int(s % 100))
@@ -113,6 +125,7 @@ def seconds_delta(start_time, end_time):
     return sec_t
 
 def dummy_hour(the_time):
+    'Identify the_time in which period'
     dummy = 0
     for i in range(len(time_period)):
         if the_time == time_period['Middle'][i]:
@@ -122,6 +135,7 @@ def dummy_hour(the_time):
 #%% ZCB
 
 def zcb_rate(trade_time, expire_time):
+    'Call the ZCB Rate'
     try:
         init_day = zcb_list.index(trade_time)
     except ValueError:
@@ -150,6 +164,7 @@ def zcb_rate(trade_time, expire_time):
 #%% define information aggregation method
 
 def MK_disc(S, K, t): # Maturity and strike discount 
+    'Maturity and Moneyness Discount'
     try:
         m = float(K/S - 1) # moneyness
         M = max(1, t/30.0) #days to month; at least one-month
@@ -160,11 +175,13 @@ def MK_disc(S, K, t): # Maturity and strike discount
     return w
 
 def MD_disc(t):
+    'Maturity Discount'
     M = max(1, t/30)
     w = exp(- (M - 1)**2)
     return w
 
 def KD_disc(S, K, t):
+    'Moneyness Discount'
     m = float(K/S - 1) 
     w = exp(-(m**2)/2)
     return w
@@ -173,6 +190,7 @@ def KD_disc(S, K, t):
 #%% record the volume and put-call pair
 
 def call_put_pair(start, end):
+    'Pair the Put Call Option'
     pair_list = []
     pair_dic = {}
     num_put_call = 0
@@ -274,7 +292,7 @@ def volatility_spread_hour(start, end):
             K = float(pair_list[i][0]['EXERCISE_PRICE'])
             t = time_delta(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])/365
             q = 0
-            call_price = float((pair_list[i][3] + pair_list[i][4])/2)
+            call_price = float(max(pair_list[i][3], pair_list[i][4]))
             put_price = float((pair_list[i][5] + pair_list[i][6])/2)
             volume = MK_disc(S, K, t)
             
@@ -335,6 +353,8 @@ def volatility_spread_hour(start, end):
                 volatility_spread.append(vol_spread)
                 spread_volume.append(volume)
                 record_vs([vol_spread, timediff, moneyness, t, dummy])
+                
+                
                 
         else:
             b = b + 1
@@ -630,18 +650,23 @@ def df_quant(rc):
     return overall_rc   
 
 #%% Run the IVS
-df_overall_vs = pd.DataFrame()
-
-for i in range(6, 7):
-    period_start = 72#Begin in 1
-    period_end = 73
-#    period_start = 16 #Begin in 1
-#    period_end = 17    
-
-    df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
-    plot_vs_by_halfhr(df_year_vs, period_start, period_end)
-    df_overall_vs = df_overall_vs.append(df_year_vs)
-    print("I finish a year!!")
+if __name__ ==  '__main__':
+    '''
+    Year and Start code: (2007, 1), (2008, 12), (2009, 24), (2010, 36)
+    (2011, 48), (2012, 60), (2013, 72), (2014, 84), (2015, 96), (2016, 108), 
+    (2017, 120)
+    ''' 
+    zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
+    df_overall_vs = pd.DataFrame()
+    for i in range(0, 1):
+        period_start = 72#Begin in 1
+        period_end = 73
+   
+    
+        df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
+        plot_vs_by_halfhr(df_year_vs, period_start, period_end)
+        df_overall_vs = df_overall_vs.append(df_year_vs)
+        print("I finish a year!!")
 
 #%% Store the file
 

@@ -292,7 +292,7 @@ def volatility_spread_hour(start, end):
             K = float(pair_list[i][0]['EXERCISE_PRICE'])
             t = time_delta(pair_list[i][0]['TRADE_DATE'], pair_list[i][0]['EXPIRATION_DATE'])/365
             q = 0
-            call_price = float(max(pair_list[i][3], pair_list[i][4]))
+            call_price = float((pair_list[i][3] + pair_list[i][4])/2)
             put_price = float((pair_list[i][5] + pair_list[i][6])/2)
             volume = MK_disc(S, K, t)
             
@@ -308,7 +308,7 @@ def volatility_spread_hour(start, end):
             else:
                 moneyness = 0
                 
-            if t < 10/365: #eliminate the option with expiration less than 30 days
+            if t < 5/365: #eliminate the option with expiration less than 30 days
                 c = c+1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
@@ -444,7 +444,7 @@ def missing_vs(day_token, one_day_vs, cym):
     return one_day_vs
 
 #Black friday CBOE only works to 12:30
-black_friday = pd.read_csv("E:/Spyder/import_csv/blackfriday.csv")
+black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
 black_friday = list(black_friday['blackfriday'])
 
 def black_fri_vs(one_day_vs):

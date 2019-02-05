@@ -26,13 +26,12 @@ config = {
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
 
+work_dir = os.getcwd()
+Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
+
 #%% load the data from Mysql, ZCB
 def load_prepared_data(first_year, end_year):
     'Load ZCB data and produce the list of year and month'
-    work_dir = os.getcwd()
-    Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
-
-    
     list_year_and_month = []
     start_year = 2007
     end_year = 2017
@@ -273,6 +272,7 @@ def record_vs(vs_information):
 #%% volatility spread per hour
 # vs wighted by MK discount
 def volatility_spread_hour(start, end):
+    'Filter and Construct the Valid Pair Option'
     volatility_spread = []
     spread_volume = []
     pair_list, numpc, numc, nump, spendtime = call_put_pair(start, end)
@@ -481,6 +481,7 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 
 #%% organize the time code
 def hid_dim_loc(cym):
+    ''
     print("Now, we are in: %s"%list_year_and_month[cym])
     global df, hour_period
     tpl = 0
@@ -539,6 +540,7 @@ def hid_dim_loc(cym):
 #%% Main Code
     
 def one_period_vs(start_period, end_period):
+    'Period IVS, Amount of Put and Call, Seconds spended'
     global hid_loc, dim_loc, dim_list, df
     df_one_period_vs = pd.DataFrame() #volatility Spread
     df_one_period_npc = pd.DataFrame() #number of puts and calls
@@ -643,11 +645,11 @@ def one_period_vs(start_period, end_period):
 
 #%% calculate the df and pair_option quantity
 
-overall_rc = 0
+sum__rc = 0
 def df_quant(rc):
-    global overall_rc
-    overall_rc = overall_rc + rc
-    return overall_rc   
+    global sum__rc
+    sum__rc = sum__rc + rc
+    return sum__rc  
 
 #%% Run the IVS
 if __name__ ==  '__main__':

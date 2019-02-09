@@ -26,12 +26,17 @@ config = {
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor(buffered=True)
 
+work_dir = os.getcwd()
+Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
+SQL_database = 'Quote'
+
+black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
+black_friday = list(black_friday['blackfriday'])
+
+
 #%% load the data from Mysql, ZCB
 def load_prepared_data(first_year, end_year):
     'Load ZCB data and produce the list of year and month'
-    work_dir = os.getcwd()
-    Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
-
     
     list_year_and_month = []
     start_year = 2007
@@ -83,7 +88,6 @@ def load_prepared_data(first_year, end_year):
 #%% 
 def sql_df(cym):
     'read the data from SQL'
-    SQL_database = 'evan4'
     sql = "SELECT * FROM " + SQL_database + ".mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
     results = cursor.fetchall() 
@@ -273,6 +277,7 @@ def record_vs(vs_information):
 #%% volatility spread per hour
 # vs wighted by MK discount
 def volatility_spread_hour(start, end):
+    'Pair the valid Option'
     volatility_spread = []
     spread_volume = []
     pair_list, numpc, numc, nump, spendtime = call_put_pair(start, end)
@@ -308,7 +313,7 @@ def volatility_spread_hour(start, end):
             else:
                 moneyness = 0
                 
-            if t < 5/365: #eliminate the option with expiration less than 30 days
+            if t < 10/365: #eliminate the option with expiration less than 30 days
                 c = c+1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
@@ -354,8 +359,7 @@ def volatility_spread_hour(start, end):
                 spread_volume.append(volume)
                 record_vs([vol_spread, timediff, moneyness, t, dummy])
                 
-                
-                
+            
         else:
             b = b + 1
             volatility_spread.append(0.0)
@@ -363,11 +367,19 @@ def volatility_spread_hour(start, end):
     
     if a != 0:
         rate1 = b/a #due to no match 
-        no_match(rate1)
         rate2 = d/a #due to call lower bound
-        call_lbnd(rate2)
         rate3 = c/a
-        lessthan10days(rate3)
+    if a == 0:
+        rate1 = 0
+        rate2 = 0
+        rate3 = 1
+        
+    no_match(rate1)
+    call_lbnd(rate2)
+    lessthan10days(rate3)
+    
+    'Weighted IVS'
+    
     try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
         hour_vs = np.average(volatility_spread, weights = weights_aggr)
@@ -444,8 +456,6 @@ def missing_vs(day_token, one_day_vs, cym):
     return one_day_vs
 
 #Black friday CBOE only works to 12:30
-black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
-black_friday = list(black_friday['blackfriday'])
 
 def black_fri_vs(one_day_vs):
     list_len = len(one_day_vs)
@@ -643,11 +653,11 @@ def one_period_vs(start_period, end_period):
 
 #%% calculate the df and pair_option quantity
 
-overall_rc = 0
+sum_rc = 0
 def df_quant(rc):
-    global overall_rc
-    overall_rc = overall_rc + rc
-    return overall_rc   
+    global sum_rc
+    sum_rc = sum_rc + rc
+    return sum_rc   
 
 #%% Run the IVS
 if __name__ ==  '__main__':
@@ -659,8 +669,8 @@ if __name__ ==  '__main__':
     zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
     df_overall_vs = pd.DataFrame()
     for i in range(0, 1):
-        period_start = 72#Begin in 1
-        period_end = 73
+        period_start = 120#Begin in 1
+        period_end = 132
    
     
         df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)

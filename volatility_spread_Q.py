@@ -18,7 +18,7 @@ import os
 #%%
 config = {
     'user': 'root',
-    'password': 'Ntu830531',
+    'password': 'Ntunew123',
     'host': 'localhost'
 }
 #140.112.111.161
@@ -28,13 +28,17 @@ cursor = cnx.cursor(buffered=True)
 
 work_dir = os.getcwd()
 Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
+SQL_database = 'Quote2008'
+
+black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
+black_friday = list(black_friday['blackfriday'])
 
 #%% load the data from Mysql, ZCB
 def load_prepared_data(first_year, end_year):
     'Load ZCB data and produce the list of year and month'
     list_year_and_month = []
-    start_year = 2007
-    end_year = 2017
+    start_year = first_year
+    end_year = end_year
     start_month = 1
     end_month = 12
     
@@ -82,7 +86,7 @@ def load_prepared_data(first_year, end_year):
 #%% 
 def sql_df(cym):
     'read the data from SQL'
-    SQL_database = 'evan4'
+    
     sql = "SELECT * FROM " + SQL_database + ".mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
     results = cursor.fetchall() 
@@ -401,9 +405,10 @@ pair_list = []
 def show_pl(pl):
     pair_list.append(pl)
     
-#%% Deal with the v.s. missing due to time missing
+#%% 
 
 def missing_vs(day_token, one_day_vs, cym):
+    'Deal with the v.s. missing due to time missing'
     s = 0
     if not day_token == 0: 
         day_begin = dim_loc[day_token - 1] 
@@ -444,8 +449,6 @@ def missing_vs(day_token, one_day_vs, cym):
     return one_day_vs
 
 #Black friday CBOE only works to 12:30
-black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
-black_friday = list(black_friday['blackfriday'])
 
 def black_fri_vs(one_day_vs):
     list_len = len(one_day_vs)
@@ -652,6 +655,7 @@ def df_quant(rc):
     return sum__rc  
 
 #%% Run the IVS
+       
 if __name__ ==  '__main__':
     '''
     Year and Start code: (2007, 1), (2008, 12), (2009, 24), (2010, 36)
@@ -661,8 +665,8 @@ if __name__ ==  '__main__':
     zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
     df_overall_vs = pd.DataFrame()
     for i in range(0, 1):
-        period_start = 72#Begin in 1
-        period_end = 73
+        period_start = 13#Begin in 1
+        period_end = 14
    
     
         df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)

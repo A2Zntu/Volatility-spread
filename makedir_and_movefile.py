@@ -7,13 +7,13 @@ Created on Wed Nov  7 14:42:11 2018
 
 import os, shutil, glob
 
-path = 'D:/SPXintra/'
+path = 'D:/SPX Tick Data/'
 
 
 list_year_and_month = []
 list_year = []
-start_year = 2009
-end_year = 2010
+start_year = 2010
+end_year = 2018
 start_month = 1
 end_month = 12
 
@@ -53,7 +53,7 @@ def right_dir(year, res):
     
 
 
-extension = 'csv'
+extension = 'gz'
 
 for i, year in enumerate(range(start_year, end_year)):
     os.chdir(path + str(year))

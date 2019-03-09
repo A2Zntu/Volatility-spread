@@ -5,7 +5,6 @@ Created on Thu Dec 27 22:19:48 2018
 @author: Evan
 """
 import mysql.connector
-from mysql.connector.constants import ClientFlag
 import pandas as pd
 import numpy as np
 from datetime import date, time, datetime
@@ -18,7 +17,7 @@ import os
 #%%
 config = {
     'user': 'root',
-    'password': 'Ntunew123',
+    'password': 'Ntu830531',
     'host': 'localhost'
 }
 #140.112.111.161
@@ -665,8 +664,8 @@ if __name__ ==  '__main__':
     zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
     df_overall_vs = pd.DataFrame()
     for i in range(0, 1):
-        period_start = 13#Begin in 1
-        period_end = 14
+        period_start = 12#Begin in 1
+        period_end = 24
    
     
         df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)

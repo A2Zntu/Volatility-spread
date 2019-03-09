@@ -1,18 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Nov 21 10:55:52 2018
+Created on Sat Mar  9 10:38:50 2019
 
-@author: user_2
+@author: Evan
 """
+import mysql
+from mysql.connector import *
+from mysql.connector import errorcode
 
 
-def dummy_hour(the_time):
-    dummy = 0
-    for i in range(len(time_period)):
-        if the_time >= time_period['Head'][i] and the_time <= time_period['Tail'][i]:
-            dummy = i
-    return dummy
+config = {
+  'host':'127.0.0.1',
+  'user':'root',
+  'password':'Ntu830531'
+}
 
-the_time = df['TRADE_TIME'][65]
-dummy = dummy_hour(the_time)
-print(dummy)
+# Construct connection string
+try:
+   conn = mysql.connector.connect(**config)
+   print("Connection established")
+except mysql.connector.Error as err:
+  if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+    print("Something is wrong with the user name or password")
+  elif err.errno == errorcode.ER_BAD_DB_ERROR:
+    print("Database does not exist")
+  else:
+    print(err)
+else:
+  cursor = conn.cursor()

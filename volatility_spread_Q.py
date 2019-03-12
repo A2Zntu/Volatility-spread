@@ -5,6 +5,7 @@ Created on Thu Dec 27 22:19:48 2018
 @author: Evan
 """
 import mysql.connector
+import pymysql
 import pandas as pd
 import numpy as np
 from datetime import date, time, datetime
@@ -13,6 +14,7 @@ from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
 from itertools import repeat
 import os
+import tqdm
 
 #%%
 config = {
@@ -22,12 +24,12 @@ config = {
 }
 #140.112.111.161
 
-cnx = mysql.connector.connect(**config)
-cursor = cnx.cursor(buffered=True)
+cnx = pymysql.connect(**config)
+cursor = cnx.cursor()
 
 work_dir = os.getcwd()
 Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
-SQL_database = 'Quote2008'
+
 
 black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
 black_friday = list(black_friday['blackfriday'])
@@ -85,6 +87,7 @@ def load_prepared_data(first_year, end_year):
 #%% 
 def sql_df(cym):
     'read the data from SQL'
+    SQL_database = 'quote' + str(list_year_and_month[cym])[:4] #year
     
     sql = "SELECT * FROM " + SQL_database + ".mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
@@ -483,8 +486,8 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 
 #%% organize the time code
 def hid_dim_loc(cym):
-    ''
-    print("Now, we are in: %s"%list_year_and_month[cym])
+
+    print("Loading data of {} ...".format(list_year_and_month[cym]))
     global df, hour_period
     tpl = 0
     df = sql_df(cym)
@@ -579,8 +582,8 @@ def one_period_vs(start_period, end_period):
                     if not len(one_day_vs) == 14:
 
                         if not df["TRADE_DATE"][start] in black_friday:
-                            print(dim_loc.index(hid_loc[i]))
-                            print("== MOM! I am in the Area.==")
+#                            print(dim_loc.index(hid_loc[i]))
+#                            print("== The length of IVS is not 14==")
                             one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs, cym)
 
                             
@@ -663,15 +666,16 @@ if __name__ ==  '__main__':
     ''' 
     zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
     df_overall_vs = pd.DataFrame()
-    for i in range(0, 1):
+    for i in tqdm.tqdm(range(0, 1), desc= 'IVS'):
         period_start = 12#Begin in 1
         period_end = 24
    
-    
+
         df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
         plot_vs_by_halfhr(df_year_vs, period_start, period_end)
         df_overall_vs = df_overall_vs.append(df_year_vs)
         print("I finish a year!!")
+    cnx.close()
 
 #%% Store the file
 

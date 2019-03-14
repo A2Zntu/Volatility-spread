@@ -382,13 +382,13 @@ def volatility_spread_hour(start, end):
         hour_vs = np.nan
     
     show_pl(pair_list)
-    print("總PAIR:%i"%a)
-    print("Match不到%i"%b)
-    print("到期日小於十天%i"%c)
-    print("Call價格不合%i"%d)
-    print("CALL PUT價格不合%i"%f)
-    print("PUT價格不合%i"%f)
-    print("==========")
+#    print("總PAIR:%i"%a)
+#    print("Match不到%i"%b)
+#    print("到期日小於十天%i"%c)
+#    print("Call價格不合%i"%d)
+#    print("CALL PUT價格不合%i"%f)
+#    print("PUT價格不合%i"%f)
+#    print("==========")
     return hour_vs, numpc, numc, nump, spendtime
 
 no_match_rate = []

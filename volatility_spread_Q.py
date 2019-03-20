@@ -4,8 +4,7 @@ Created on Thu Dec 27 22:19:48 2018
 
 @author: Evan
 """
-import mysql.connector
-from mysql.connector.constants import ClientFlag
+import pymysql
 import pandas as pd
 import numpy as np
 from datetime import date, time, datetime
@@ -14,6 +13,7 @@ from math import exp, sqrt, log, fabs
 import matplotlib.pyplot as plt
 from itertools import repeat
 import os
+import tqdm
 
 #%%
 config = {
@@ -23,24 +23,22 @@ config = {
 }
 #140.112.111.161
 
-cnx = mysql.connector.connect(**config)
-cursor = cnx.cursor(buffered=True)
+cnx = pymysql.connect(**config)
+cursor = cnx.cursor()
 
 work_dir = os.getcwd()
 Path_default_readcsv = os.path.join(work_dir, 'Read_csv')
-SQL_database = 'Quote'
+
 
 black_friday = pd.read_csv(Path_default_readcsv + "/blackfriday.csv")
 black_friday = list(black_friday['blackfriday'])
 
-
 #%% load the data from Mysql, ZCB
 def load_prepared_data(first_year, end_year):
     'Load ZCB data and produce the list of year and month'
-    
     list_year_and_month = []
-    start_year = 2007
-    end_year = 2017
+    start_year = first_year
+    end_year = end_year
     start_month = 1
     end_month = 12
     
@@ -88,6 +86,8 @@ def load_prepared_data(first_year, end_year):
 #%% 
 def sql_df(cym):
     'read the data from SQL'
+    SQL_database = 'quote' + str(list_year_and_month[cym])[:4] #year
+    
     sql = "SELECT * FROM " + SQL_database + ".mdr_trade" + list_year_and_month[cym]
     cursor.execute(sql)
     results = cursor.fetchall() 
@@ -193,10 +193,11 @@ def KD_disc(S, K, t):
                   
 #%% record the volume and put-call pair
 
-def call_put_pair(start, end):
+def call_put_pair(start, end, volume_size_method = "MK_disc"):
     'Pair the Put Call Option'
     pair_list = []
     pair_dic = {}
+    # Record the Number of each option
     num_put_call = 0
     num_call = 0
     num_put = 0
@@ -206,20 +207,26 @@ def call_put_pair(start, end):
         num_put_call = num_put_call + 1
 
         td = time_delta(df["TRADE_DATE"][i], df["EXPIRATION_DATE"][i]) #calulate the delta T
-    
         dict_key = "K:"+ str(df["EXERCISE_PRICE"][i])+"/"+"T:" +str(td)
-#-------------------------------------------------------------------------
-# --> current volume (without adjusted)
-#        cur_vol = df['TRADE_SIZE'][i] 
-#------------------------------------------------------------------------- 
-# --> current volume (with adjusted)
+        
         S = float(df['UNDERLYING_INSTRUMENT_PRICE'][i])
         K = float(df['EXERCISE_PRICE'][i])
         t = time_delta(df['TRADE_DATE'][i], df['EXPIRATION_DATE'][i])
-        cur_vol = MK_disc(S, K, t)
         Bid = float(df['BID_PRICE'][i])
         Ask = float(df['ASK_PRICE'][i])
-#-------------------------------------------------------------------------
+        # Different mothod for vol
+        if volume_size_method  == "MK_disc":
+            cur_vol = MK_disc(S, K, t)
+        elif volume_size_method  == "MD_disc":
+            cur_vol = MD_disc(S, K, t)
+        elif volume_size_method  == "KD_disc":
+            cur_vol = KD_disc(S, K, t)
+        elif volume_size_method  == "Trade_size":
+            cur_vol = df['TRADE_SIZE'][i] 
+
+#=============================================================================
+#   Transform the Dict into Pair            
+#=============================================================================
         if dict_key not in pair_dic:
 
             pair_dic[dict_key] = len(pair_dic)
@@ -259,6 +266,7 @@ def call_put_pair(start, end):
                 elif pair_list[pair_dic[dict_key]][1]['ASK_PRICE'] > df['ASK_PRICE'][i]: #choose lower ask price
                     pair_list[pair_dic[dict_key]][6] = Ask    
     
+    # In this period, how long did it take to gather the data
     try:
         spendtime = seconds_delta(df["TRADE_TIME"][start], df["TRADE_TIME"][end-1])
     except KeyError:
@@ -276,19 +284,20 @@ def record_vs(vs_information):
     
 #%% volatility spread per hour
 # vs wighted by MK discount
-def volatility_spread_hour(start, end):
-    'Pair the valid Option'
+def volatility_spread_hour(start, end, print_out_info = False):
+    'Filter and Construct the Valid Pair Option'
     volatility_spread = []
     spread_volume = []
     pair_list, numpc, numc, nump, spendtime = call_put_pair(start, end)
-    a = 0
-    b = 0
-    c = 0
-    d = 0
-    e = 0
-    f = 0
+    # for instantiating the failure rates
+    totalPairAmount = 0
+    maturityRuleVio = 0
+    callRuleVio = 0
+    putRuleVio = 0
+    noMatch = 0
+    
     for i in range(len(pair_list)):
-        a = a + 1
+        totalPairAmount +=  1
         if len(pair_list[i][0]) > 1 and len(pair_list[i][1]) > 1:
             S = min(float(pair_list[i][0]['UNDERLYING_INSTRUMENT_PRICE']),
                     float(pair_list[i][1]['UNDERLYING_INSTRUMENT_PRICE'])) #choose small S for intrinsic_c
@@ -302,7 +311,7 @@ def volatility_spread_hour(start, end):
             volume = MK_disc(S, K, t)
             
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
-            dummy = dummy_hour(pair_list[i][0]['TRADE_TIME'])
+            dummy = pair_list[i][0]['PERIOD_TIME']
             PV_K = K*exp(-r*t)
 
             intrinsic_c = fabs(max(S - PV_K, 0.0))
@@ -313,25 +322,21 @@ def volatility_spread_hour(start, end):
             else:
                 moneyness = 0
                 
-            if t < 10/365: #eliminate the option with expiration less than 30 days
-                c = c+1
+            if t < 10/365: #eliminate the option with expiration less than 10 days
+                maturityRuleVio += 1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
                 
-            elif call_price < intrinsic_c:
-                d = d + 1
+            elif call_price < intrinsic_c or call_price >= S:
+                callRuleVio +=  1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
     
-            elif call_price >= S or put_price >= PV_K:
-                e = e + 1
+            elif put_price < intrinsic_p or put_price >= PV_K:
+                putRuleVio += 1
                 volatility_spread.append(0.0)
                 spread_volume.append(0.0)
-                
-            elif put_price < intrinsic_p:
-                f = f +1
-                volatility_spread.append(0.0)
-                spread_volume.append(0.0)                
+                               
             
             elif S == 0 : #typo error
                 volatility_spread.append(0.0)
@@ -359,27 +364,22 @@ def volatility_spread_hour(start, end):
                 spread_volume.append(volume)
                 record_vs([vol_spread, timediff, moneyness, t, dummy])
                 
-            
+                
+                
         else:
-            b = b + 1
+            noMatch = noMatch + 1
             volatility_spread.append(0.0)
             spread_volume.append(0.0)
     
-    if a != 0:
-        rate1 = b/a #due to no match 
-        rate2 = d/a #due to call lower bound
-        rate3 = c/a
-    if a == 0:
-        rate1 = 0
-        rate2 = 0
-        rate3 = 1
+    if totalPairAmount != 0:
+        rate1 = noMatch/totalPairAmount #due to no match 
+        no_match(rate1)
         
-    no_match(rate1)
-    call_lbnd(rate2)
-    lessthan10days(rate3)
-    
-    'Weighted IVS'
-    
+        rate2 = callRuleVio/totalPairAmount #due to call lower bound
+        call_lbnd(rate2)
+        
+        rate3 = maturityRuleVio/totalPairAmount
+        lessthan10days(rate3)
     try: 
         weights_aggr = [i/sum(spread_volume) for i in spread_volume]
         hour_vs = np.average(volatility_spread, weights = weights_aggr)
@@ -388,13 +388,14 @@ def volatility_spread_hour(start, end):
         hour_vs = np.nan
     
     show_pl(pair_list)
-    print("總PAIR:%i"%a)
-    print("Match不到%i"%b)
-    print("到期日小於十天%i"%c)
-    print("Call價格不合%i"%d)
-    print("CALL PUT價格不合%i"%f)
-    print("PUT價格不合%i"%f)
-    print("==========")
+    if print_out_info == True:
+        print("總PAIR:%i"%totalPairAmount)
+        print("Match不到%i"%noMatch)
+        print("到期日小於十天%i"%maturityRuleVio)
+        print("Call價格不合%i"%callRuleVio)
+        print("PUT價格不合%i"%putRuleVio)
+        print("==========")
+    
     return hour_vs, numpc, numc, nump, spendtime
 
 no_match_rate = []
@@ -413,9 +414,10 @@ pair_list = []
 def show_pl(pl):
     pair_list.append(pl)
     
-#%% Deal with the v.s. missing due to time missing
+#%% 
 
 def missing_vs(day_token, one_day_vs, cym):
+    'Deal with the v.s. missing due to time missing'
     s = 0
     if not day_token == 0: 
         day_begin = dim_loc[day_token - 1] 
@@ -491,7 +493,8 @@ def plot_vs_by_day(df_one_period_vs, start_period, end_period):
 
 #%% organize the time code
 def hid_dim_loc(cym):
-    print("Now, we are in: %s"%list_year_and_month[cym])
+    print("\n")
+    print("Loading data of {} ...".format(list_year_and_month[cym]))
     global df, hour_period
     tpl = 0
     df = sql_df(cym)
@@ -549,6 +552,7 @@ def hid_dim_loc(cym):
 #%% Main Code
     
 def one_period_vs(start_period, end_period):
+    'Period IVS, Amount of Put and Call, Seconds spended'
     global hid_loc, dim_loc, dim_list, df
     df_one_period_vs = pd.DataFrame() #volatility Spread
     df_one_period_npc = pd.DataFrame() #number of puts and calls
@@ -585,8 +589,8 @@ def one_period_vs(start_period, end_period):
                     if not len(one_day_vs) == 14:
 
                         if not df["TRADE_DATE"][start] in black_friday:
-                            print(dim_loc.index(hid_loc[i]))
-                            print("== MOM! I am in the Area.==")
+#                            print(dim_loc.index(hid_loc[i]))
+#                            print("== The length of IVS is not 14==")
                             one_day_vs = missing_vs(dim_loc.index(hid_loc[i]), one_day_vs, cym)
 
                             
@@ -653,43 +657,72 @@ def one_period_vs(start_period, end_period):
 
 #%% calculate the df and pair_option quantity
 
-sum_rc = 0
+sum__rc = 0
 def df_quant(rc):
-    global sum_rc
-    sum_rc = sum_rc + rc
-    return sum_rc   
+    global sum__rc
+    sum__rc = sum__rc + rc
+    return sum__rc  
 
+#%% save data 
+def saving_file(df, saving_name = "df", results_path = os.path.join(work_dir, "Output_Result")):
+    if not os.path.isdir(results_path):
+        os.mkdir(results_path)
+    results_path = os.path.join(results_path, datetime.today().strftime('%Y%m%d')) 
+    print ("writing file to {}".format(results_path))
+
+    if os.path.exists(results_path):
+        results_path = results_path + '_' + datetime.datetime.today().strftime('_%H%M%S')
+    if not os.path.isdir(results_path):
+        os.mkdir(results_path)
+        
+    if df:
+        df.to_csv(os.path.join(results_path, saving_name))
+    else:
+        print("Saving Files Failure!")
+    
+    
 #%% Run the IVS
+       
 if __name__ ==  '__main__':
     '''
     Year and Start code: (2007, 1), (2008, 12), (2009, 24), (2010, 36)
     (2011, 48), (2012, 60), (2013, 72), (2014, 84), (2015, 96), (2016, 108), 
     (2017, 120)
     ''' 
+    
     zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
     df_overall_vs = pd.DataFrame()
-    for i in range(0, 1):
-        period_start = 120#Begin in 1
-        period_end = 132
+    df_overall_npc = pd.DataFrame()
+    df_overall_nc = pd.DataFrame()
+    df_overall_np = pd.DataFrame()
+    df_overall_ts = pd.DataFrame()
+    for i in tqdm.tqdm(range(0, 11), desc= 'IVS'):
+        period_start = i*12
+        period_end = (i+1)*12
    
-    
+
         df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
         plot_vs_by_halfhr(df_year_vs, period_start, period_end)
         df_overall_vs = df_overall_vs.append(df_year_vs)
-        print("I finish a year!!")
+        df_overall_npc = df_overall_npc.append(df_year_npc)
+        df_overall_nc = df_overall_nc.append(df_year_nc)
+        df_overall_np = df_overall_np.append(df_year_np)
+        df_overall_ts = df_overall_ts.append(df_year_ts)
+        
+        print("\nI finish a year!!")
 
-#%% Store the file
-
-#df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
-#info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
-#df_aggre_vs_info.columns = info_aggre_columns_name
-#plot_vs_by_halfhr(df_overall_vs, period_start, period_end)
-#
-#LAB_address = 'C:/Users/user/Documents/GitHub/Volatility-spread'
-#
-#df_aggre_vs_info.to_csv(LAB_address + "/Quote_csv/info_vs_2007to2017.csv")
-#df_overall_vs.to_csv(LAB_address + "/Quote_csv/vs_mkdweighted_2007to2017.csv")
-
+   
+    df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
+    info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
+    df_aggre_vs_info.columns = info_aggre_columns_name
+    #saving file
+    saving_file(df_overall_vs, saving_name = 'df_overall_vs')
+    saving_file(df_overall_npc, saving_name = 'df_overall_npc')
+    saving_file(df_overall_nc, saving_name = 'df_overall_nc')
+    saving_file(df_overall_np, saving_name = 'df_overall_np')
+    saving_file(df_overall_ts, saving_name = 'df_overall_ts')
+    saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info')
+    cnx.close()
 
 #%% Generate the intraday SPX500 price
 
@@ -732,19 +765,3 @@ def SPX_price(start_period, end_period):
         
     df_intraday_SPX.columns = x_axis_hour
     return df_intraday_SPX
-#%%
-
-#df_overall_price = pd.DataFrame()
-##assume 
-#for i in range(1, endyearloc):
-#    period_start = yearloc[i-1] #Begin in 1
-#    period_end = yearloc[i]
-##    period_start = 1 #Begin in 1
-##    period_end = 2    
-#    df_year_price = SPX_price(period_start, period_end)
-#    df_overall_price = df_overall_price.append(df_year_price)
-  
-#%%
-#df_SPX_hh = pd.DataFrame(df_overall_price)
-#df_SPX_hh.to_csv("C:/Users/Evan/Documents/GitHub/Volatility-spread/Quote_csv/SPX_hh.csv")
-

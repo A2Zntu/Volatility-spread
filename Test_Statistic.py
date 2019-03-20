@@ -16,9 +16,16 @@ from statsmodels.graphics.gofplots import qqplot
 import statsmodels.formula.api as sm
 from statsmodels.tsa.stattools import adfuller
 import seaborn as sns; sns.set()
+import os
+from tqdm import tqdm
+
 #%%
-time_period =  pd.read_csv("E:/Spyder/period_trade_1.csv", header = None)
-time_period.columns = ['Head', 'Tail', 'Fake_middle', 'Middle']
+work_dir = os.getcwd()
+work_dir = os.path.join(work_dir, 'Documents', 'GitHub', 'Volatility-spread')
+Path_default_readcsv = os.path.join(work_dir,'Read_csv')
+#%%
+time_period =  pd.read_csv(Path_default_readcsv + "\period_Quote.csv", header = None)
+time_period.columns = ['Head', 'Tail', 'Middle']
 
 x_axis_hour = [] #generate x axis
 for s in time_period['Middle']:
@@ -51,6 +58,7 @@ for i in range(start_year, end_year + 1):
 
 #%% large sample size convert t-test to Z-test 
 def twosampleZ(data1, data2):
+    '''large sample size convert t-test to Z-test '''
     X1_bar = np.nanmean(data1)
     X2_bar = np.nanmean(data2)
     std1 = np.nanstd(data1)
@@ -96,7 +104,8 @@ def results_summary_to_df(results):
     return results_df
     
 #%% test the population mean of IVS between 2007 to 2017 (11 X 14)
-df_IVS = pd.read_csv("E:/Spyder/IVS/vs_10days_mkdweighted_2007to2017.csv", index_col = 0)
+Path_output_csv = os.path.join(work_dir, 'Output_Result')    
+df_IVS = pd.read_csv(os.path.join(Path_output_csv, 'df_overall_vs.csv'), index_col = 0)
 # Assume all the distributions are not normal. 
 list_stat = []
 list_p = []
@@ -119,7 +128,7 @@ df_corrcoef = pd.DataFrame(list_corrcoef, columns = x_axis_hour)
 df_corrcoef.index = x_axis_hour
 
 #%% discriptive statistic
-
+# find how many nan value in each year
 whole_days = list(df_IVS.index)
 
 start_year = 2007
@@ -146,68 +155,77 @@ for i in range(1, 12):
     df_aggre_nan = df_aggre_nan.append(pd.DataFrame(df_nan).T)
 df_aggre_nan.index = list_year
 
-#%% read 192391 IVS data with TimeDiff, Moneyness, Maturity, Dummy 
+#%% read Huge IVS data with timediff, Moneyness, Maturity, Dummy 
+# Quote Data Num: 1692542
+def clip_the_info_data(chunk_num = 0, chunksize = 500000, Info_path = os.path.join(work_dir, 'Output_Result',  'df_aggre_vs_info.csv')):
+    '''Since the Info VS is too big, we cut it in small pieces'''
+    traintypes = {
+    'IVS': 'float', 
+    'timediff':'float',
+    'Moneyness':'float', 
+    'Maturity':'float', 
+    'Dummy':'float'}
+    
+    cols = list(traintypes.keys())
+    
+    df_list = [] 
+    for df_chunk in tqdm(pd.read_csv(Info_path, usecols = cols, dtype = traintypes, chunksize=chunksize)):
+        df_list.append(df_chunk) 
+        
+    return df_list[chunk_num]
 
-df_info = pd.read_csv("E:/Spyder/IVS/info_vs_aggre_2007to2017.csv", skiprows = 0, index_col = 0)
+#%% timediff, Moneyness, Maturity, Dummy 
+def print_correlation(df_info, item1, item2, item1abs = True, item2abs = True):
+    if type(item1) == str and type(item2) == str:
+        if item1abs == True:
+            df_info[item1] = abs(df_info[item1])
+        if item2abs == True:
+            df_info[item2] = abs(df_info[item2])
+            
+        info_corr = np.corrcoef(df_info[item1], df_info[item2])
+        print('Correlation of %s and %s: '%(item1, item2))
+        print(info_corr)
+        print("==================================")
+    else:
+        print("Input Type is Wrong!!")
 
+df_info = clip_the_info_data(chunk_num =3)  
 
-df_info['Moneyness'] = abs(df_info['Moneyness'])
-df_info['TimeDiff'] = df_info['TimeDiff']/300
-df_info['IVS'] = abs(df_info['IVS'])
-df_info['SpriceDiff'] = abs(df_info['SpriceDiff'])
-#results = adfuller(df_info['IVS'], autolag='AIC')
-#print('ADF Statistic: %f' % results[0])
-#print('p-value: %f' % results[1])
-print("Corr:")
-info_corr = np.corrcoef(df_info['IVS'], df_info['SpriceDiff'])
-print(info_corr)
-print("Corr:")
-info_corr = np.corrcoef(df_info['TimeDiff'], df_info['SpriceDiff'])
-print(info_corr)
-print("Corr:")
-info_corr = np.corrcoef(df_info['TimeDiff'], df_info['IVS'])
-print(info_corr)
-#print("kurtosis:%f"%kurtosis(df_info['IVS']))
-#print("skewness:%f"%skew(df_info['IVS']))
-#autocorr = df_info['IVS'].autocorr(lag=1)
-#print(autocorr)
-
-#%% regression on IVS
+#%% print correlation and do regression 
 # The t-statistics are Newy-west adjusted. 
+print_correlation(df_info, 'IVS', 'Maturity')
 
-results = sm.ols(formula = 'IVS ~ TimeDiff + Moneyness+ Maturity + C(Dummy) + SpriceDiff ', data =  df_info).fit(cov_type='HAC',cov_kwds={'maxlags':1})
+df_info['IVS'] = abs(df_info['IVS'])
+df_info['Moneyness'] = abs(df_info['Moneyness'])
+
+results = sm.ols(formula = 'IVS ~ timediff + Moneyness + Maturity',
+                 data = df_info, missing='drop').fit(cov_type='HAC', cov_kwds={'maxlags':1})
 results_summary = results.summary()
-print(results.summary())
+print(results.summary()) 
 df_res = results_summary_to_df(results)
 
-#%% plot the IVS
-#plt.figure(figsize=(15,6))
-#meanIVS = np.average(df_info['IVS'])
-#stdIVS = np.std(df_info['IVS'])
-#upp = meanIVS + 2*stdIVS
-#low = meanIVS - 2*stdIVS
-#plt.hist(x = df_info['IVS'], bins = 1000, range = [low, upp],  color='#0504aa')
-#plt.grid(axis='y', alpha=0.75)
-#plt.xlabel('Value')
-#plt.ylabel('Frequency')
-#plt.title('IVS')
 
 #%% read data
-df_SP = pd.read_csv("E:/Spyder/BMG/SPX_PUTCALL.csv", index_col = 0)
+Path_SP_data = os.path.join(Path_default_readcsv, 'SPX_PUTCALL.csv')
+df_SP = pd.read_csv(Path_SP_data, index_col = 0)
 list_SPXprice = [price for price in df_SP['SPX Price']]
 list_SPXreturn = [np.nan,]
 # Return = log(Pt+1/Pt)
 for i in range(1, len(list_SPXprice)):
     list_SPXreturn.append(np.log(list_SPXprice[i]/list_SPXprice[i-1]))
-
+    
+# Paste the SPX information to df_IVS
 df_IVS['SPX price'] = df_IVS.index.map(df_SP['SPX Price'])
 df_SP['SPX_return'] = list_SPXreturn
 df_IVS['SPX return'] =  df_IVS.index.map(df_SP['SPX_return'])
 df_IVS['lag return'] = df_IVS['SPX return'].shift(1)
 
 #%%
-df_DEF = pd.read_csv("E:/Spyder/BondYield/DDEF.csv", index_col = 0)
-df_TERM = pd.read_csv("E:/Spyder/BondYield/DTERM.csv", index_col = 0)
+Path_DEF_data = os.path.join(work_dir, 'BondYield', 'DDEF.csv')
+Path_TERM_data = os.path.join(work_dir, 'BondYield', 'DTERM.csv')
+df_DEF = pd.read_csv(Path_DEF_data, index_col = 0)
+df_TERM = pd.read_csv(Path_TERM_data, index_col = 0)
+
 df_IVS['DDEF'] =  df_IVS.index.map(df_DEF['DDEF'])
 df_IVS['DTERM'] =  df_IVS.index.map(df_TERM['DTERM(10year-1month)'])
 
@@ -216,13 +234,14 @@ columns_name = ['t0830', 't0900', 't0930', 't1000',
                 't1030', 't1100', 't1130', 't1200', 
                 't1230', 't1300', 't1330', 't1400', 
                 't1430', 't1500', 'SPX_price', 'SPX_return',
-                'DDEF', 'DTERM', 'lag_return']
+                'lag_return', 'DDEF', 'DTERM']
+
 df_copy.columns = columns_name
-df_copy.to_csv("E:/Spyder/IVS/copy.csv")
+df_copy.to_csv(os.path.join(Path_output_csv, 'df_IVS_SPX.csv'))
 
 #%% regression on return
-df_change = pd.read_csv("E:/Spyder/IVS/copy.csv", index_col = 0)
-results = sm.ols(formula = 'SPX_return ~ t1500 + DDEF + DTERM + lag_return', data =  df_copy, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
+df_change = pd.read_csv(os.path.join(Path_output_csv, 'df_IVS_SPX.csv'), index_col = 0)
+results = sm.ols(formula = 'SPX_return ~ t1130 + DDEF + DTERM + lag_return', data =  df_copy, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary())
 df_res = results_summary_to_df(results)

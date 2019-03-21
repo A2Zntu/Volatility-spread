@@ -240,9 +240,17 @@ df_copy.columns = columns_name
 df_copy.to_csv(os.path.join(Path_output_csv, 'df_IVS_SPX.csv'))
 
 #%% regression on return
-df_change = pd.read_csv(os.path.join(Path_output_csv, 'df_IVS_SPX.csv'), index_col = 0)
-results = sm.ols(formula = 'SPX_return ~ t1130 + DDEF + DTERM + lag_return', data =  df_copy, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
-results_summary = results.summary()
-print(results.summary())
-df_res = results_summary_to_df(results)
+def test_SPX_return(time_input = 't0800', read_path = os.path.join(Path_output_csv, 'df_IVS_SPX.csv')):
+    '''Input the time period and check the test statisitics
+        e.g. time_input = 't1200', it means we'd like to test 12:00; 
+        read_path = the path of csv with SPX_return and DDEF, DTERM appended
+    '''
+    
+    df_change = pd.read_csv(read_path, index_col = 0)
+    results = sm.ols(formula = 'SPX_return ~ {} + DDEF + DTERM + lag_return'.format(time_input), data =  df_change, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
+    print(results.summary())
+    df_res = results_summary_to_df(results)
+    return df_res
 
+#%%
+df_res = test_SPX_return(time_input='t0800')

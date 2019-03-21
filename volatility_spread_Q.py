@@ -479,6 +479,8 @@ def plot_vs_by_halfhr(df_one_period_vs, start_period, end_period):
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
+    title_name = list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] 
+    plt.savefig(os.path.join(work_dir, 'Graph_Quote', title_name))
     
 def plot_vs_by_day(df_one_period_vs, start_period, end_period):
     mean_one_month_vs_1 = df_one_period_vs.mean(axis=1)
@@ -680,7 +682,52 @@ def saving_file(df, saving_name = "df", results_path = os.path.join(work_dir, "O
     else:
         print("Saving Files Failure!")
     
+
+
+#%% Generate the intraday SPX500 price
+
+def half_hour_SPX(loc):
     
+    S = float(df['UNDERLYING_INSTRUMENT_PRICE'][loc])
+    return S
+
+def SPX_price(start_period, end_period):
+    global hid_loc, dim_loc, dim_list
+    df_intraday_SPX = pd.DataFrame()
+    
+    for cym in range(start_period, end_period):
+        hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
+        
+        one_day_price = []
+        one_month_price = []
+        for i in range(len(hid_loc)):
+    
+            if i != len(hid_loc)-1:
+                if hid_loc[i] not in dim_loc: # 08:30~14:30
+                    loc = hid_loc[i]
+                    half_hour_price = half_hour_SPX(loc)
+                    one_day_price.append(half_hour_price)
+                    
+                else:  #15:00
+                    loc = hid_loc[i]
+                    one_month_price.append(one_day_price)
+                    one_day_price = []
+                    one_day_price.append(half_hour_SPX(loc))
+    
+            else:
+                
+                one_month_price.append(one_day_price)
+        # transfer 2-D lists to dataframe
+        # combine the one month_vs into one year vs 
+        df_one_month_price = pd.DataFrame(one_month_price)
+        df_one_month_price.index = dim_list
+        df_intraday_SPX = df_intraday_SPX.append(df_one_month_price)
+        
+    df_intraday_SPX.columns = x_axis_hour
+    return df_intraday_SPX
+
+
+   
 #%% Run the IVS
        
 if __name__ ==  '__main__':
@@ -724,44 +771,4 @@ if __name__ ==  '__main__':
     saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info')
     cnx.close()
 
-#%% Generate the intraday SPX500 price
 
-def half_hour_SPX(loc):
-    
-    S = float(df['UNDERLYING_INSTRUMENT_PRICE'][loc])
-    return S
-
-def SPX_price(start_period, end_period):
-    global hid_loc, dim_loc, dim_list
-    df_intraday_SPX = pd.DataFrame()
-    
-    for cym in range(start_period, end_period):
-        hid_loc, dim_loc, dim_list = hid_dim_loc(cym)
-        
-        one_day_price = []
-        one_month_price = []
-        for i in range(len(hid_loc)):
-    
-            if i != len(hid_loc)-1:
-                if hid_loc[i] not in dim_loc: # 08:30~14:30
-                    loc = hid_loc[i]
-                    half_hour_price = half_hour_SPX(loc)
-                    one_day_price.append(half_hour_price)
-                    
-                else:  #15:00
-                    loc = hid_loc[i]
-                    one_month_price.append(one_day_price)
-                    one_day_price = []
-                    one_day_price.append(half_hour_SPX(loc))
-    
-            else:
-                
-                one_month_price.append(one_day_price)
-        # transfer 2-D lists to dataframe
-        # combine the one month_vs into one year vs 
-        df_one_month_price = pd.DataFrame(one_month_price)
-        df_one_month_price.index = dim_list
-        df_intraday_SPX = df_intraday_SPX.append(df_one_month_price)
-        
-    df_intraday_SPX.columns = x_axis_hour
-    return df_intraday_SPX

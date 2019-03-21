@@ -224,7 +224,9 @@ def call_put_pair(start, end, volume_size_method = "MK_disc"):
         elif volume_size_method  == "Trade_size":
             cur_vol = df['TRADE_SIZE'][i] 
 
-#=============================================================================           
+#=============================================================================
+#   Transform the Dict into Pair            
+#=============================================================================
         if dict_key not in pair_dic:
 
             pair_dic[dict_key] = len(pair_dic)
@@ -386,8 +388,6 @@ def volatility_spread_hour(start, end, print_out_info = False):
         hour_vs = np.nan
     
     show_pl(pair_list)
-
-
     if print_out_info == True:
         print("總PAIR:%i"%totalPairAmount)
         print("Match不到%i"%noMatch)
@@ -479,6 +479,8 @@ def plot_vs_by_halfhr(df_one_period_vs, start_period, end_period):
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
+    title_name = list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] 
+    plt.savefig(os.path.join(work_dir, 'Graph_Quote', title_name))
     
 def plot_vs_by_day(df_one_period_vs, start_period, end_period):
     mean_one_month_vs_1 = df_one_period_vs.mean(axis=1)
@@ -680,49 +682,7 @@ def saving_file(df, saving_name = "df", results_path = os.path.join(work_dir, "O
     else:
         print("Saving Files Failure!")
     
-    
-#%% Run the IVS
-       
-if __name__ ==  '__main__':
-    '''
-    Year and Start code: (2007, 1), (2008, 12), (2009, 24), (2010, 36)
-    (2011, 48), (2012, 60), (2013, 72), (2014, 84), (2015, 96), (2016, 108), 
-    (2017, 120)
-    ''' 
-    
-    zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
-    df_overall_vs = pd.DataFrame()
-    df_overall_npc = pd.DataFrame()
-    df_overall_nc = pd.DataFrame()
-    df_overall_np = pd.DataFrame()
-    df_overall_ts = pd.DataFrame()
-    for i in tqdm.tqdm(range(0, 1), desc= 'IVS'):
-        period_start = i*12
-        period_end = (i+1)*12
-   
 
-        df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
-        plot_vs_by_halfhr(df_year_vs, period_start, period_end)
-        df_overall_vs = df_overall_vs.append(df_year_vs)
-        df_overall_npc = df_overall_npc.append(df_year_npc)
-        df_overall_nc = df_overall_nc.append(df_year_nc)
-        df_overall_np = df_overall_np.append(df_year_np)
-        df_overall_ts = df_overall_ts.append(df_year_ts)
-        
-        print("\nI finish a year!!")
-
-   
-    df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
-    info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
-    df_aggre_vs_info.columns = info_aggre_columns_name
-    #saving file
-    saving_file(df_overall_vs, saving_name = 'df_overall_vs')
-    saving_file(df_overall_npc, saving_name = 'df_overall_npc')
-    saving_file(df_overall_nc, saving_name = 'df_overall_nc')
-    saving_file(df_overall_np, saving_name = 'df_overall_np')
-    saving_file(df_overall_ts, saving_name = 'df_overall_ts')
-    saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info')
-    cnx.close()
 
 #%% Generate the intraday SPX500 price
 
@@ -765,3 +725,50 @@ def SPX_price(start_period, end_period):
         
     df_intraday_SPX.columns = x_axis_hour
     return df_intraday_SPX
+
+
+   
+#%% Run the IVS
+       
+if __name__ ==  '__main__':
+    '''
+    Year and Start code: (2007, 1), (2008, 12), (2009, 24), (2010, 36)
+    (2011, 48), (2012, 60), (2013, 72), (2014, 84), (2015, 96), (2016, 108), 
+    (2017, 120)
+    ''' 
+    
+    zcb, zcb_list, x_axis_hour, list_year_and_month, time_period, endyearloc = load_prepared_data(2007, 2017)
+    df_overall_vs = pd.DataFrame()
+    df_overall_npc = pd.DataFrame()
+    df_overall_nc = pd.DataFrame()
+    df_overall_np = pd.DataFrame()
+    df_overall_ts = pd.DataFrame()
+    for i in tqdm.tqdm(range(0, 11), desc= 'IVS'):
+        period_start = i*12
+        period_end = (i+1)*12
+   
+
+        df_year_vs, df_year_npc, df_year_nc, df_year_np, df_year_ts = one_period_vs(period_start, period_end)
+        plot_vs_by_halfhr(df_year_vs, period_start, period_end)
+        df_overall_vs = df_overall_vs.append(df_year_vs)
+        df_overall_npc = df_overall_npc.append(df_year_npc)
+        df_overall_nc = df_overall_nc.append(df_year_nc)
+        df_overall_np = df_overall_np.append(df_year_np)
+        df_overall_ts = df_overall_ts.append(df_year_ts)
+        
+        print("\nI finish a year!!")
+
+   
+    df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
+    info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
+    df_aggre_vs_info.columns = info_aggre_columns_name
+    #saving file
+    saving_file(df_overall_vs, saving_name = 'df_overall_vs')
+    saving_file(df_overall_npc, saving_name = 'df_overall_npc')
+    saving_file(df_overall_nc, saving_name = 'df_overall_nc')
+    saving_file(df_overall_np, saving_name = 'df_overall_np')
+    saving_file(df_overall_ts, saving_name = 'df_overall_ts')
+    saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info')
+    cnx.close()
+
+

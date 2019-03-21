@@ -309,7 +309,7 @@ def volatility_spread_hour(start, end, print_out_info = False):
             volume = MK_disc(S, K, t)
             
             timediff = seconds_delta(pair_list[i][0]['TRADE_TIME'], pair_list[i][1]['TRADE_TIME'])
-            dummy = dummy_hour(pair_list[i][0]['TRADE_TIME'])
+            dummy = pair_list[i][0]['PERIOD_TIME']
             PV_K = K*exp(-r*t)
 
             intrinsic_c = fabs(max(S - PV_K, 0.0))

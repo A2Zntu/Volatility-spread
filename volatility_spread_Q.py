@@ -479,7 +479,7 @@ def plot_vs_by_halfhr(df_one_period_vs, start_period, end_period):
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
-    title_name = list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] 
+    title_name = list_year_and_month[start_period] +'~' + list_year_and_month[end_period-1] + '.png' 
     plt.savefig(os.path.join(work_dir, 'Graph_Quote', title_name))
     
 def plot_vs_by_day(df_one_period_vs, start_period, end_period):
@@ -673,11 +673,11 @@ def saving_file(df, saving_name = "df", results_path = os.path.join(work_dir, "O
     print ("writing file to {}".format(results_path))
 
     if os.path.exists(results_path):
-        results_path = results_path + '_' + datetime.datetime.today().strftime('_%H%M%S')
+        results_path = results_path + '_' + datetime.today().strftime('_%H%M%S')
     if not os.path.isdir(results_path):
         os.mkdir(results_path)
         
-    if df:
+    if len(df) > 0:
         df.to_csv(os.path.join(results_path, saving_name))
     else:
         print("Saving Files Failure!")
@@ -757,18 +757,17 @@ if __name__ ==  '__main__':
         df_overall_ts = df_overall_ts.append(df_year_ts)
         
         print("\nI finish a year!!")
-
-   
+  
     df_aggre_vs_info = pd.DataFrame(aggre_vs_inform)
     info_aggre_columns_name = ['IVS', 'timediff', 'Moneyness', 'Maturity', 'Dummy']
     df_aggre_vs_info.columns = info_aggre_columns_name
     #saving file
-    saving_file(df_overall_vs, saving_name = 'df_overall_vs')
-    saving_file(df_overall_npc, saving_name = 'df_overall_npc')
-    saving_file(df_overall_nc, saving_name = 'df_overall_nc')
-    saving_file(df_overall_np, saving_name = 'df_overall_np')
-    saving_file(df_overall_ts, saving_name = 'df_overall_ts')
-    saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info')
+    saving_file(df_overall_vs, saving_name = 'df_overall_vs.csv')
+    saving_file(df_overall_npc, saving_name = 'df_overall_npc.csv')
+    saving_file(df_overall_nc, saving_name = 'df_overall_nc.csv')
+    saving_file(df_overall_np, saving_name = 'df_overall_np.csv')
+    saving_file(df_overall_ts, saving_name = 'df_overall_ts.csv')
+    saving_file(df_aggre_vs_info, saving_name = 'df_aggre_vs_info.csv')
     cnx.close()
 
 

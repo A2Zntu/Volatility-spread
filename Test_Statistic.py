@@ -81,8 +81,6 @@ def plot_des_info(df_year_vs, yearname):
     plt.ylabel('Spread Volatility', fontsize=14)
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.show()
-
-
 #%% turn results into dataframe
 
 def results_summary_to_df(results):
@@ -157,6 +155,7 @@ df_aggre_nan.index = list_year
 
 #%% read Huge IVS data with timediff, Moneyness, Maturity, Dummy 
 # Quote Data Num: 1692542
+'''For IVS ~ timediff + Moneyness + Maturity + C(Time_period)'''
 def clip_the_info_data(chunk_num = 0, chunksize = 500000, Info_path = os.path.join(work_dir, 'Output_Result',  'df_aggre_vs_info.csv')):
     '''Since the Info VS is too big, we cut it in small pieces'''
     traintypes = {
@@ -189,7 +188,12 @@ def print_correlation(df_info, item1, item2, item1abs = True, item2abs = True):
     else:
         print("Input Type is Wrong!!")
 
-df_info = clip_the_info_data(chunk_num =3)  
+df0 = clip_the_info_data(chunk_num = 0)
+df1 = clip_the_info_data(chunk_num = 1)
+df2 = clip_the_info_data(chunk_num = 2)
+df3 = clip_the_info_data(chunk_num = 3)
+df_info = pd.concat([df0, df1, df2, df3]) 
+del df0, df1, df2, df3 
 
 #%% print correlation and do regression 
 # The t-statistics are Newy-west adjusted. 
@@ -198,7 +202,7 @@ print_correlation(df_info, 'IVS', 'Maturity')
 df_info['IVS'] = abs(df_info['IVS'])
 df_info['Moneyness'] = abs(df_info['Moneyness'])
 
-results = sm.ols(formula = 'IVS ~ timediff + Moneyness + Maturity',
+results = sm.ols(formula = 'IVS ~ timediff + Moneyness + Maturity + C(Dummy)',
                  data = df_info, missing='drop').fit(cov_type='HAC', cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary()) 
@@ -206,6 +210,8 @@ df_res = results_summary_to_df(results)
 
 
 #%% read data
+'''For SPX_return_F ~ C(time_period) + DDEF + DTERM + SPX_return '''
+
 Path_SP_data = os.path.join(Path_default_readcsv, 'SPX_PUTCALL.csv')
 df_SP = pd.read_csv(Path_SP_data, index_col = 0)
 list_SPXprice = [price for price in df_SP['SPX Price']]
@@ -217,9 +223,11 @@ for i in range(1, len(list_SPXprice)):
 # Paste the SPX information to df_IVS
 df_IVS['SPX price'] = df_IVS.index.map(df_SP['SPX Price'])
 df_SP['SPX_return'] = list_SPXreturn
-df_IVS['SPX return'] =  df_IVS.index.map(df_SP['SPX_return'])
-df_IVS['lag return'] = df_IVS['SPX return'].shift(1)
-
+df_IVS['SPX_return'] =  df_IVS.index.map(df_SP['SPX_return'])
+df_IVS['SPX_return_Lag1'] = df_IVS['SPX_return'].shift(1) # t-1 Return 
+df_IVS['SPX_return_For1'] = df_IVS['SPX_return'].shift(-1) # t+1 Return 
+df_IVS['SPX_return_For5'] = df_IVS['SPX_return'].shift(-5) #t+5 Return  
+ 
 #%%
 Path_DEF_data = os.path.join(work_dir, 'BondYield', 'DDEF.csv')
 Path_TERM_data = os.path.join(work_dir, 'BondYield', 'DTERM.csv')
@@ -234,7 +242,7 @@ columns_name = ['t0830', 't0900', 't0930', 't1000',
                 't1030', 't1100', 't1130', 't1200', 
                 't1230', 't1300', 't1330', 't1400', 
                 't1430', 't1500', 'SPX_price', 'SPX_return',
-                'lag_return', 'DDEF', 'DTERM']
+                'SPX_return_Lag1', 'SPX_return_For1', 'SPX_return_For5','DDEF', 'DTERM']
 
 df_copy.columns = columns_name
 df_copy.to_csv(os.path.join(Path_output_csv, 'df_IVS_SPX.csv'))
@@ -247,10 +255,14 @@ def test_SPX_return(time_input = 't0800', read_path = os.path.join(Path_output_c
     '''
     
     df_change = pd.read_csv(read_path, index_col = 0)
-    results = sm.ols(formula = 'SPX_return ~ {} + DDEF + DTERM + lag_return'.format(time_input), data =  df_change, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
+    results = sm.ols(formula = 'SPX_return_For5 ~ {} + DDEF + DTERM + SPX_return'.format(time_input), data =  df_change, missing='drop').fit(cov_type='HAC',cov_kwds={'maxlags':1})
     print(results.summary())
     df_res = results_summary_to_df(results)
     return df_res
 
 #%%
-df_res = test_SPX_return(time_input='t0800')
+df_res = test_SPX_return(time_input='t0900')
+
+#%%
+
+

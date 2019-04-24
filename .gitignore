@@ -1,5 +1,9 @@
 *.csv
 *.pickle
 *.pyc
+*.pdf
+*.xlsx
+*.xlsm
+
 
 */*.csv

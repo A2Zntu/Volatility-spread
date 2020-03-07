@@ -187,7 +187,8 @@ def print_correlation(df_info, item1, item2, item1abs = True, item2abs = True):
         print("==================================")
     else:
         print("Input Type is Wrong!!")
-
+        
+#%%
 df0 = clip_the_info_data(chunk_num = 0)
 df1 = clip_the_info_data(chunk_num = 1)
 df2 = clip_the_info_data(chunk_num = 2)
@@ -202,7 +203,7 @@ print_correlation(df_info, 'IVS', 'Maturity')
 df_info['IVS'] = abs(df_info['IVS'])
 df_info['Moneyness'] = abs(df_info['Moneyness'])
 
-results = sm.ols(formula = 'IVS ~ timediff + Moneyness + Maturity + C(Dummy)',
+results = sm.ols(formula = 'IVS ~ timediff + C(Dummy)',
                  data = df_info, missing='drop').fit(cov_type='HAC', cov_kwds={'maxlags':1})
 results_summary = results.summary()
 print(results.summary()) 

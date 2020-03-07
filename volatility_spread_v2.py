@@ -18,7 +18,7 @@ from itertools import repeat
 #%% load the data from Mysql, ZCB
 config = {
     'user': 'admin',
-    'password': 'Ntunew123',
+    'password': 'XXXXXXXXX',
     'host': 'localhost'
 }
 #140.112.111.161
